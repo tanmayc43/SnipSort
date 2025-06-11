@@ -1,112 +1,119 @@
-import { useEffect, useState } from 'react'
-import { Menu, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-//import { Logo } from '@/components/logo'
-import { cn } from '@/lib/utils'
-import { motion, useScroll } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { routes } from '@/routes'
+import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet"
+import { Button } from "@/components/ui/button"
+import { ToggleButton } from "@/components/ToggleButton"
+import { Link } from "react-router-dom";
 
-export function Navbar() {
-  const [menuState, setMenuState] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
-  const { scrollYProgress } = useScroll()
-
-  useEffect(() => {
-    const unsubscribe = scrollYProgress.on('change', (latest) => {
-      setScrolled(latest > 0.05)
-    })
-    return () => unsubscribe()
-  }, [scrollYProgress])
-
-  // Filter routes to use only those you want in navbar
-  const navbarRoutes = routes.filter(route =>
-    ['Features', 'Solution', 'Pricing', 'About'].includes(route.name)
-  )
-
+export default function Component() {
   return (
-    <header>
-      <nav data-state={menuState && 'active'} className="fixed z-20 w-full pt-2">
-        <div className={cn(
-          'mx-auto max-w-7xl rounded-3xl px-6 transition-all duration-300 lg:px-12',
-          scrolled && 'bg-background/50 backdrop-blur-2xl'
-        )}>
-          <motion.div
-            key={1}
-            className={cn(
-              'relative flex flex-wrap items-center justify-between gap-6 py-3 duration-200 lg:gap-0 lg:py-6',
-              scrolled && 'lg:py-4'
-            )}
-          >
-            <div className="flex w-full items-center justify-between gap-12 lg:w-auto">
-              <Link to="/" aria-label="home" className="flex items-center space-x-2">
-                <Logo />
-              </Link>
-
-              <button
-                onClick={() => setMenuState(!menuState)}
-                aria-label={menuState ? 'Close Menu' : 'Open Menu'}
-                className="relative z-20 -m-2.5 -mr-4 block p-2.5 lg:hidden"
-              >
-                <Menu className={cn(
-                  'm-auto size-6 duration-200',
-                  menuState && 'rotate-180 scale-0 opacity-0'
-                )} />
-                <X className={cn(
-                  'absolute inset-0 m-auto size-6 rotate-[-180deg] scale-0 opacity-0 duration-200',
-                  menuState && 'rotate-0 scale-100 opacity-100'
-                )} />
-              </button>
-
-              <div className="hidden lg:block">
-                <ul className="flex gap-8 text-sm">
-                  {navbarRoutes.map(({ path, name }) => (
-                    <li key={path}>
-                      <Link
-                        to={path}
-                        className="block text-muted-foreground duration-150 hover:text-accent-foreground"
-                        onClick={() => setMenuState(false)}
-                      >
-                        {name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+    <header className="flex h-20 w-full shrink-0 items-center px-4 md:px-6">
+      {/* Mobile menu */}
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button variant="outline" size="icon" className="lg:hidden">
+            <MenuIcon className="h-6 w-6" />
+            <span className="sr-only">Toggle navigation menu</span>
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left">
+          <div className="flex items-center mb-4">
+            <MountainIcon className="h-6 w-6 mr-2" />
+            <span className="sr-only">Acme Inc</span>
+          </div>
+          <div className="grid gap-2 py-6">
+            <Button asChild variant="ghost" className="w-full justify-start">
+              <Link to="/">Home</Link>
+            </Button>
+            <Button asChild variant="ghost" className="w-full justify-start">
+              <Link to="/about">About</Link>
+            </Button>
+            <Button asChild variant="ghost" className="w-full justify-start">
+              <Link to="/services">Services</Link>
+            </Button>
+            <Button asChild variant="ghost" className="w-full justify-start">
+              <Link to="/contact">Contact</Link>
+            </Button>
+            <div className="flex gap-2 mt-4">
+              <ToggleButton />
+              <Button asChild variant="default" className="flex-1">
+                <Link to="/signup">Sign Up</Link>
+              </Button>
+              <Button asChild variant="default" className="flex-1">
+                <Link to="/login">Login</Link>
+              </Button>
             </div>
-
-            <div className={cn(
-              'hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none',
-              'bg-background dark:shadow-none',
-              menuState && 'block'
-            )}>
-              <div className="lg:hidden">
-                <ul className="space-y-6 text-base">
-                  {navbarRoutes.map(({ path, name }) => (
-                    <li key={path}>
-                      <Link
-                        to={path}
-                        className="block text-muted-foreground duration-150 hover:text-accent-foreground"
-                        onClick={() => setMenuState(false)}
-                      >
-                        {name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/login">Login</Link>
-                </Button>
-                <Button size="sm" asChild>
-                  <Link to="/signup">Sign Up</Link>
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+      {/* Desktop logo */}
+      <a href="#" className="mr-6 hidden lg:flex">
+        <MountainIcon className="h-6 w-6" />
+        <span className="sr-only">SnipSort</span>
+      </a>
+      {/* Desktop nav */}
+      <nav className="hidden lg:flex gap-2">
+        <Button asChild variant="ghost">
+          <Link to="/">Home</Link>
+        </Button>
+        <Button asChild variant="ghost">
+          <Link to="/about">About</Link>
+        </Button>
+        <Button asChild variant="ghost">
+          <Link to="/services">Services</Link>
+        </Button>
+        <Button asChild variant="ghost">
+          <Link to="/contact">Contact</Link>
+        </Button>
       </nav>
+      {/* Right side buttons */}
+      <div className="ml-auto hidden lg:flex items-center gap-2">
+        <ToggleButton />
+        <Button asChild variant="default">
+          <Link to="/signup">Sign Up</Link>
+        </Button>
+        <Button asChild variant="default">
+          <Link to="/login">Login</Link>
+        </Button>
+      </div>
     </header>
+  )
+}
+
+function MenuIcon(props) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="4" x2="20" y1="12" y2="12" />
+      <line x1="4" x2="20" y1="6" y2="6" />
+      <line x1="4" x2="20" y1="18" y2="18" />
+    </svg>
+  )
+}
+
+function MountainIcon(props) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
+    </svg>
   )
 }
