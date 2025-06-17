@@ -1,39 +1,28 @@
-import { Button } from "../components/ui/button";
-import { UserAuth } from "../context/AuthContext"
-import { useNavigate } from "react-router-dom";
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { UserAuth } from '../context/AuthContext'
 
+export default function Dashboard() {
+    const { session, loading } = UserAuth()
+    const navigate = useNavigate()
 
-export default function Dashboard(){
-    const {session, signOutUser} = UserAuth();
-    const navigate = useNavigate();
-    console.log(session);
-
-    const handleSignOut = async (e) => {
-        e.preventDefault();
-        try {
-            await signOutUser();
-            navigate('/login');
-        } catch (error) {
-            console.error("Error signing out:", error);
+    useEffect(() => {
+        if (!loading) {
+            if (!session) {
+                navigate('/login')
+            } else {
+                navigate('/dashboard/snippets')
+            }
         }
-    }
+    }, [session, loading, navigate])
 
-    if (!session) {
+    if (loading) {
         return (
             <div className="flex h-screen w-full items-center justify-center">
-                <h1 className="text-2xl font-bold">You are not logged in</h1>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-        );
+        )
     }
 
-    return(
-        <div className="flex h-screen w-full items-center justify-center">
-            <h1 className="text-2xl font-bold">Dashboard</h1>
-            <h2>welcome {session?.user?.email}</h2>
-            <Button onClick = {handleSignOut}
-                className="mt-4">
-                Sign Out    
-            </Button>
-        </div>
-    )
+    return null
 }

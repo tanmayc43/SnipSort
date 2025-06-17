@@ -4,33 +4,63 @@ import { Label } from '@/components/ui/label'
 import { Link, useNavigate } from 'react-router-dom'
 import { ToggleButton } from '../components/ToggleButton'
 import { useState } from "react"
-import { supabase } from "../supabaseClient"
 import { UserAuth } from "../context/AuthContext"
+import { useToast } from '@/hooks/use-toast'
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" })
-  const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const { signInUser } = UserAuth()
+  const { signInUser, signInWithGoogle } = UserAuth()
+  const { toast } = useToast()
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
   const handleLogin = async e => {
     e.preventDefault()
     setLoading(true)
-    setError(null)
     try {
       const result = await signInUser(form.email, form.password)
       if (result.success) {
+        toast({
+          title: "Welcome back!",
+          description: "You have been successfully signed in.",
+        })
         navigate('/dashboard')
       } else {
-        setError(result.error)
+        toast({
+          title: "Sign in failed",
+          description: result.error,
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      setError(error.message)
+      toast({
+        title: "Sign in failed",
+        description: error.message,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const result = await signInWithGoogle()
+      if (!result.success) {
+        toast({
+          title: "Google sign in failed",
+          description: result.error,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Google sign in failed",
+        description: error.message,
+        variant: "destructive",
+      })
     }
   }
 
@@ -47,20 +77,19 @@ export default function Login() {
       <section className="flex min-h-screen px-4 py-16 md:py-32">
         <form
           onSubmit={handleLogin}
-          className="bg-card m-auto h-fit w-full max-w-sm rounded-[calc(var(--radius)+.125rem)] border p-0.5 shadow-md dark:[--color-muted:var(--color-zinc-900)]"
+          className="bg-card m-auto h-fit w-full max-w-sm rounded-[calc(var(--radius)+.125rem)] border p-0.5 shadow-md"
         >
           <div className="p-8 pb-6">
             <div>
               <h1 className="mb-1 mt-4 text-xl font-semibold">Welcome back!</h1>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-3">
+            <div className="mt-6 grid grid-cols-1 gap-3">
               <Button
                 type="button"
                 variant="outline"
-                onClick={async () => {
-                  await supabase.auth.signInWithOAuth({ provider: 'google' })
-                }}
+                onClick={handleGoogleSignIn}
+                className="w-full"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -85,7 +114,7 @@ export default function Login() {
                     d="M130.55 50.479c24.514 0 41.05 10.589 50.479 19.438l36.844-35.974C195.245 12.91 165.798 0 130.55 0C79.49 0 35.393 29.301 13.925 71.947l42.211 32.783c10.59-31.477 39.891-54.251 74.414-54.251"
                   ></path>
                 </svg>
-                <span>Google</span>
+                <span>Continue with Google</span>
               </Button>
             </div>
 
@@ -122,14 +151,14 @@ export default function Login() {
                   required
                   name="password"
                   id="password"
-                  className="input sz-md variant-mixed"
                   value={form.password}
                   onChange={handleChange}
                 />
               </div>
 
-              <Button className="w-full" type="submit" disabled={loading}>Sign In</Button>
-              {error && <div className="text-red-500">{error}</div>}
+              <Button className="w-full" type="submit" disabled={loading}>
+                {loading ? 'Signing in...' : 'Sign In'}
+              </Button>
             </div>
           </div>
 
