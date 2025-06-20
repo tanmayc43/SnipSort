@@ -1,76 +1,85 @@
 import { createContext, useEffect, useState, useContext } from 'react';
-import { supabase } from '../lib/supabase';
+import { authApi } from '../lib/api';
 
 const AuthContext = createContext();
 
 export const AuthContextProvider = ({ children }) => { 
-    const [session, setSession] = useState(null);
+    const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
     const signUpUser = async (email, password) => {
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                emailRedirectTo: `${window.location.origin}/dashboard`
+        try {
+            const result = await authApi.register(email, password);
+            if (result.success) {
+                setUser(result.data.user);
+                return { success: true, data: result.data };
             }
-        });
-        if (error) {
+            return { success: false, error: result.error };
+        } catch (error) {
             console.error("Error signing up:", error);
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
-        return {success: true, data};
     }
 
     const signInUser = async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
-        if (error) {
+        try {
+            const result = await authApi.login(email, password);
+            if (result.success) {
+                setUser(result.data.user);
+                return { success: true, data: result.data };
+            }
+            return { success: false, error: result.error };
+        } catch (error) {
             console.error("Error signing in:", error);
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
-        return {success: true, data};
     }
 
     const signInWithGoogle = async () => {
-        const { data, error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: `${window.location.origin}/dashboard`
-            }
-        });
-        if (error) {
-            console.error("Error signing in with Google:", error);
-            return {success: false, error: error.message};
-        }
-        return {success: true, data};
+        // Google OAuth would need to be implemented separately
+        // For now, return an error
+        return { success: false, error: "Google sign-in not implemented yet" };
     }
 
     const signOutUser = async () => {
-        const { error } = await supabase.auth.signOut();
-        if(error) {
+        try {
+            authApi.logout();
+            setUser(null);
+        } catch (error) {
             console.error("Error signing out:", error);
             throw error;
         }
     }
 
+    // Check if user is authenticated on app load
     useEffect(() => {
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
+        const checkAuth = () => {
+            const token = authApi.getToken();
+            if (token) {
+                // In a real app, you'd validate the token with the server
+                // For now, we'll assume it's valid if it exists
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    if (payload.exp * 1000 > Date.now()) {
+                        // Token is still valid
+                        setUser({ id: payload.userId });
+                    } else {
+                        // Token expired
+                        authApi.logout();
+                    }
+                } catch (error) {
+                    // Invalid token
+                    authApi.logout();
+                }
+            }
             setLoading(false);
-        });
+        };
 
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-            setLoading(false);
-        });
-
-        return () => subscription.unsubscribe();
+        checkAuth();
     }, []);
+
+    // Create session object for compatibility with existing code
+    const session = user ? { user } : null;
 
     return(
         <AuthContext.Provider value={{

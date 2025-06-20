@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
-import { LANGUAGES, snippetService, folderService, projectService } from '@/lib/supabase'
+import { LANGUAGES } from '@/lib/constants'
+import { snippetsApi, foldersApi, projectsApi } from '@/lib/api'
 import { UserAuth } from '@/context/AuthContext'
 import MonacoEditor from '@monaco-editor/react'
 import { useTheme } from '@/components/theme-provider'
@@ -51,13 +52,18 @@ export default function SnippetEditor({ snippet, isEditing = false }) {
   const loadFoldersAndProjects = async () => {
     try {
       const [foldersData, projectsData] = await Promise.all([
-        folderService.getFolders(session.user.id),
-        projectService.getProjects(session.user.id)
+        foldersApi.getFolders(),
+        projectsApi.getProjects()
       ])
       setFolders(foldersData)
       setProjects(projectsData)
     } catch (error) {
       console.error('Error loading folders and projects:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load folders and projects.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -76,26 +82,23 @@ export default function SnippetEditor({ snippet, isEditing = false }) {
     try {
       const snippetData = {
         ...formData,
-        user_id: session.user.id,
         folder_id: organizationType === 'folder' ? formData.folder_id : null,
         project_id: organizationType === 'project' ? formData.project_id : null,
       }
 
       let savedSnippet
       if (isEditing) {
-        savedSnippet = await snippetService.updateSnippet(snippet.id, snippetData)
-        // Remove existing tags
-        await snippetService.removeTags(snippet.id)
+        savedSnippet = await snippetsApi.updateSnippet(snippet.id, snippetData)
       } else {
-        savedSnippet = await snippetService.createSnippet(snippetData)
+        savedSnippet = await snippetsApi.createSnippet(snippetData)
       }
 
-      // Add new tags
+      // Update tags
       if (tags.trim()) {
         const tagArray = tags.split(',').map(tag => tag.trim()).filter(Boolean)
-        if (tagArray.length > 0) {
-          await snippetService.addTags(savedSnippet.id, tagArray)
-        }
+        await snippetsApi.updateTags(savedSnippet.id, tagArray)
+      } else {
+        await snippetsApi.updateTags(savedSnippet.id, [])
       }
 
       toast({
@@ -108,7 +111,7 @@ export default function SnippetEditor({ snippet, isEditing = false }) {
       console.error('Error saving snippet:', error)
       toast({
         title: "Error",
-        description: `Failed to ${isEditing ? 'update' : 'create'} snippet. Please try again.`,
+        description: error.message || `Failed to ${isEditing ? 'update' : 'create'} snippet. Please try again.`,
         variant: "destructive",
       })
     } finally {
