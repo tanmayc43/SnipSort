@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast'
 import MonacoEditor from '@monaco-editor/react'
 import { useTheme } from '@/components/theme-provider'
 
-export default function SnippetView() {
+export default function SnippetView(){
   const { id } = useParams()
   const navigate = useNavigate()
   const { theme } = useTheme()
@@ -30,30 +30,34 @@ export default function SnippetView() {
   }, [id])
 
   const loadSnippet = async () => {
-    try {
+    try{
       const data = await snippetService.getSnippet(id)
       setSnippet(data)
-    } catch (error) {
-      console.error('Error loading snippet:', error)
+    }
+    catch(error){
+      console.error('Error loading snippet:', error.message)
       toast({
         title: "Error",
         description: "Failed to load snippet. Please try again.",
         variant: "destructive",
       })
       navigate('/dashboard/snippets')
-    } finally {
+    }
+    finally{
       setLoading(false)
     }
   }
 
+  // copy feature, need to add button on the title bar
   const handleCopy = async () => {
-    try {
+    try{
       await navigator.clipboard.writeText(snippet.code)
       toast({
         title: "Copied to clipboard",
         description: "Code snippet has been copied to your clipboard.",
       })
-    } catch (error) {
+    }
+    catch(error){
       toast({
         title: "Failed to copy",
         description: "Could not copy code to clipboard.",
@@ -63,15 +67,16 @@ export default function SnippetView() {
   }
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this snippet?')) {
-      try {
+    if(window.confirm('Are you sure you want to delete this snippet?')){
+      try{
         await snippetService.deleteSnippet(snippet.id)
         toast({
           title: "Snippet deleted",
           description: "The snippet has been successfully deleted.",
         })
         navigate('/dashboard/snippets')
-      } catch (error) {
+      }
+      catch(error){
         toast({
           title: "Failed to delete",
           description: "Could not delete the snippet. Please try again.",
@@ -82,7 +87,7 @@ export default function SnippetView() {
   }
 
   const handleToggleFavorite = async () => {
-    try {
+    try{
       const updatedSnippet = await snippetService.updateSnippet(snippet.id, {
         is_favorite: !snippet.is_favorite
       })
@@ -91,7 +96,8 @@ export default function SnippetView() {
         title: snippet.is_favorite ? "Removed from favorites" : "Added to favorites",
         description: `Snippet has been ${snippet.is_favorite ? 'removed from' : 'added to'} your favorites.`,
       })
-    } catch (error) {
+    }
+    catch(error){
       toast({
         title: "Failed to update",
         description: "Could not update favorite status. Please try again.",
@@ -111,7 +117,7 @@ export default function SnippetView() {
   }
 
   const getOrganizationInfo = () => {
-    if (snippet.folders) {
+    if(snippet.folders){
       return {
         name: snippet.folders.name,
         color: snippet.folders.color,
@@ -120,7 +126,7 @@ export default function SnippetView() {
         link: `/dashboard/folders/${snippet.folder_id}`
       }
     }
-    if (snippet.projects) {
+    if(snippet.projects){
       return {
         name: snippet.projects.name,
         color: snippet.projects.color,
@@ -132,7 +138,7 @@ export default function SnippetView() {
     return null
   }
 
-  if (loading) {
+  if(loading){
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
@@ -143,8 +149,8 @@ export default function SnippetView() {
     )
   }
 
-  if (!snippet) {
-    return (
+  if(!snippet){
+    return(
       <div className="p-6 text-center">
         <h1 className="text-2xl font-bold mb-4">Snippet not found</h1>
         <Button onClick={() => navigate('/dashboard/snippets')}>
@@ -156,7 +162,7 @@ export default function SnippetView() {
 
   const organizationInfo = getOrganizationInfo()
 
-  return (
+  return(
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">

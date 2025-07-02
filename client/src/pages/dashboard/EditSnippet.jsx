@@ -4,6 +4,8 @@ import SnippetEditor from '@/components/snippets/SnippetEditor'
 import { snippetService } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
 
+// need to improve this, make it floating and add better context additions for folder and project selection
+
 export default function EditSnippet() {
   const { id } = useParams()
   const navigate = useNavigate()

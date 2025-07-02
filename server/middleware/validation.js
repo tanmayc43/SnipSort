@@ -1,52 +1,48 @@
-const { body, param, query, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 
+// helper function to handle validation errors
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      error: 'Validation failed',
-      details: errors.array()
-    });
+  if(!errors.isEmpty()){
+    return res.status(400).json({ errors: errors.array() });
   }
   next();
 };
 
-const snippetValidation = [
-  body('title').trim().notEmpty().withMessage('Title is required'),
-  body('code').trim().notEmpty().withMessage('Code is required'),
-  body('language').trim().notEmpty().withMessage('Language is required'),
-  body('description').optional().trim(),
-  body('folder_id').optional().isUUID().withMessage('Invalid folder ID'),
-  body('project_id').optional().isUUID().withMessage('Invalid project ID'),
-  body('is_favorite').optional().isBoolean(),
-  body('is_public').optional().isBoolean(),
+const uuidValidation = [
+  param('id').isUUID().withMessage('Invalid UUID format.'),
   handleValidationErrors
 ];
 
 const folderValidation = [
-  body('name').trim().notEmpty().withMessage('Folder name is required'),
-  body('description').optional().trim(),
-  body('color').optional().matches(/^#[0-9A-F]{6}$/i).withMessage('Invalid color format'),
+  body('name').notEmpty().withMessage('Folder name is required.'),
   handleValidationErrors
 ];
 
 const projectValidation = [
-  body('name').trim().notEmpty().withMessage('Project name is required'),
-  body('description').optional().trim(),
-  body('color').optional().matches(/^#[0-9A-F]{6}$/i).withMessage('Invalid color format'),
-  body('is_public').optional().isBoolean(),
-  handleValidationErrors
+    body('name').notEmpty().withMessage('Project name is required.'),
+    handleValidationErrors
 ];
 
-const uuidValidation = [
-  param('id').isUUID().withMessage('Invalid ID format'),
-  handleValidationErrors
+const snippetValidation = [
+    body('title').notEmpty().withMessage('Snippet title is required.'),
+    body('code').notEmpty().withMessage('Snippet code is required.'),
+    body('language_id').isInt().withMessage('A valid language ID is required.'),
+    handleValidationErrors
 ];
+
+const projectMemberValidation = [
+    body('email').isEmail().withMessage('A valid user email is required.'),
+    body('role').isIn(['admin', 'member']).withMessage('Role must be either "admin" or "member".'),
+    handleValidationErrors
+];
+
 
 module.exports = {
-  snippetValidation,
+  handleValidationErrors,
+  uuidValidation,
   folderValidation,
   projectValidation,
-  uuidValidation,
-  handleValidationErrors
+  snippetValidation,
+  projectMemberValidation
 };

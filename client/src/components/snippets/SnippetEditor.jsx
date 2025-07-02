@@ -1,202 +1,174 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useToast } from '@/hooks/use-toast'
-import { LANGUAGES } from '@/lib/constants'
-import { snippetsApi, foldersApi, projectsApi } from '@/lib/api'
-import { UserAuth } from '@/context/AuthContext'
-import MonacoEditor from '@monaco-editor/react'
-import { useTheme } from '@/components/theme-provider'
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import MonacoEditor from '@monaco-editor/react';
+import { useTheme } from '@/components/theme-provider';
+import { toast } from 'sonner';
+import { languages } from '@/lib/constants';
 
-export default function SnippetEditor({ snippet, isEditing = false }) {
-  const { session } = UserAuth()
-  const { theme } = useTheme()
-  const { toast } = useToast()
-  const navigate = useNavigate()
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { snippetApi, folderApi, projectApi } from '@/lib/api';
 
-  const [formData, setFormData] = useState({
-    title: snippet?.title || '',
-    description: snippet?.description || '',
-    code: snippet?.code || '',
-    language: snippet?.language || 'javascript',
-    folder_id: snippet?.folder_id || null,
-    project_id: snippet?.project_id || null,
-    is_favorite: snippet?.is_favorite || false,
-    is_public: snippet?.is_public || false,
-  })
+export default function SnippetEditor() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+  const isEditing = Boolean(id);
 
-  const [tags, setTags] = useState(
-    snippet?.snippet_tags?.map(t => t.tag).join(', ') || ''
-  )
-  const [folders, setFolders] = useState([])
-  const [projects, setProjects] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [organizationType, setOrganizationType] = useState(
-    snippet?.folder_id ? 'folder' : snippet?.project_id ? 'project' : 'none'
-  )
+  // Get the referrer to know where we came from
+  const [referrer, setReferrer] = useState('');
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [code, setCode] = useState('');
+  const [languageId, setLanguageId] = useState('');
+  const [tags, setTags] = useState('');
+  const [organizationType, setOrganizationType] = useState('none');
+  const [folderId, setFolderId] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [folders, setFolders] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadFoldersAndProjects()
-  }, [])
+    // Store the referrer when component mounts
+    setReferrer(document.referrer);
+  }, []);
 
-  const loadFoldersAndProjects = async () => {
-    try {
-      const [foldersData, projectsData] = await Promise.all([
-        foldersApi.getFolders(),
-        projectsApi.getProjects()
-      ])
-      setFolders(foldersData)
-      setProjects(projectsData)
-    } catch (error) {
-      console.error('Error loading folders and projects:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load folders and projects.",
-        variant: "destructive",
-      })
-    }
-  }
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [foldersData, projectsData] = await Promise.all([
+          folderApi.getAll(),
+          projectApi.getAll()
+        ]);
+        setFolders(foldersData);
+        setProjects(projectsData);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!formData.title.trim() || !formData.code.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Title and code are required.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setLoading(true)
-    try {
-      const snippetData = {
-        ...formData,
-        folder_id: organizationType === 'folder' ? formData.folder_id : null,
-        project_id: organizationType === 'project' ? formData.project_id : null,
+        if (isEditing) {
+          const snippet = await snippetApi.getById(id);
+          setTitle(snippet.title);
+          setDescription(snippet.description);
+          setCode(snippet.code);
+          setLanguageId(String(snippet.language_id));
+          setTags((snippet.tags || []).join(', '));
+          if (snippet.folder_id) {
+            setOrganizationType('folder');
+            setFolderId(snippet.folder_id);
+          } else if (snippet.project_id) {
+            setOrganizationType('project');
+            setProjectId(snippet.project_id);
+          }
+        }
+      } catch (error) {
+        toast.error('Failed to load data', { description: error.message });
+      } finally {
+        setLoading(false);
       }
-
-      let savedSnippet
-      if (isEditing) {
-        savedSnippet = await snippetsApi.updateSnippet(snippet.id, snippetData)
-      } else {
-        savedSnippet = await snippetsApi.createSnippet(snippetData)
-      }
-
-      // Update tags
-      if (tags.trim()) {
-        const tagArray = tags.split(',').map(tag => tag.trim()).filter(Boolean)
-        await snippetsApi.updateTags(savedSnippet.id, tagArray)
-      } else {
-        await snippetsApi.updateTags(savedSnippet.id, [])
-      }
-
-      toast({
-        title: isEditing ? "Snippet updated" : "Snippet created",
-        description: `Your snippet has been ${isEditing ? 'updated' : 'created'} successfully.`,
-      })
-
-      navigate(`/dashboard/snippet/${savedSnippet.id}`)
-    } catch (error) {
-      console.error('Error saving snippet:', error)
-      toast({
-        title: "Error",
-        description: error.message || `Failed to ${isEditing ? 'update' : 'create'} snippet. Please try again.`,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+    };
+    fetchData();
+  }, [id, isEditing]);
 
   const handleOrganizationChange = (type, value) => {
-    setOrganizationType(type)
     if (type === 'folder') {
-      setFormData(prev => ({ ...prev, folder_id: value, project_id: null }))
+      setFolderId(value);
+      setProjectId('');
     } else if (type === 'project') {
-      setFormData(prev => ({ ...prev, project_id: value, folder_id: null }))
-    } else {
-      setFormData(prev => ({ ...prev, folder_id: null, project_id: null }))
+      setProjectId(value);
+      setFolderId('');
     }
-  }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!languageId) {
+      toast.error('Validation Error', { description: 'Please select a language.' });
+      return;
+    }
+    setLoading(true);
+
+    const snippetData = {
+      title,
+      description,
+      code,
+      language_id: parseInt(languageId),
+      folder_id: organizationType === 'folder' ? folderId : null,
+      project_id: organizationType === 'project' ? projectId : null,
+      tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+    };
+
+    try {
+      if (isEditing) {
+        await snippetApi.update(id, snippetData);
+        toast.success('Snippet updated successfully!');
+      } else {
+        await snippetApi.create(snippetData);
+        toast.success('Snippet created successfully!');
+      }
+      
+      // Navigate back to the appropriate location
+      if (organizationType === 'folder' && folderId) {
+        // If snippet is assigned to a folder, go to that folder
+        navigate(`/dashboard/folders/${folderId}`);
+      } else if (organizationType === 'project' && projectId) {
+        // If snippet is assigned to a project, go to that project
+        navigate(`/dashboard/projects/${projectId}`);
+      } else if (referrer.includes('/dashboard/folders/')) {
+        // If we came from a folder, go back to that folder
+        const folderMatch = referrer.match(/\/dashboard\/folders\/([^\/]+)/);
+        if (folderMatch) {
+          navigate(`/dashboard/folders/${folderMatch[1]}`);
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        // Default navigation
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      toast.error('Failed to save snippet', { description: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectedLanguageSlug = languages.find(lang => lang.id === parseInt(languageId))?.slug || 'plaintext';
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">
-          {isEditing ? 'Edit Snippet' : 'Create New Snippet'}
-        </h1>
-        <p className="text-muted-foreground">
-          {isEditing ? 'Update your code snippet' : 'Add a new code snippet to your collection'}
-        </p>
-      </div>
-
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">{isEditing ? 'Edit Snippet' : 'Create New Snippet'}</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label htmlFor="title">Title *</Label>
-            <Input
-              id="title"
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              placeholder="Enter snippet title"
-              required
-            />
+            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter snippet title" required />
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="language">Language *</Label>
-            <Select
-              value={formData.language}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, language: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select language" />
-              </SelectTrigger>
+            <Select value={languageId} onValueChange={setLanguageId}>
+              <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
               <SelectContent>
-                {LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.value} value={lang.value}>
-                    {lang.label}
-                  </SelectItem>
+                {languages.map((lang) => (
+                  <SelectItem key={lang.id} value={String(lang.id)}>{lang.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         </div>
-
         <div className="space-y-2">
           <Label htmlFor="description">Description</Label>
-          <Input
-            id="description"
-            value={formData.description}
-            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="Brief description of the snippet"
-          />
+          <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of the snippet" />
         </div>
-
         <div className="space-y-2">
           <Label htmlFor="tags">Tags</Label>
-          <Input
-            id="tags"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="Enter tags separated by commas"
-          />
-          <p className="text-xs text-muted-foreground">
-            Separate multiple tags with commas (e.g., react, hooks, javascript)
-          </p>
+          <Input id="tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Enter tags separated by commas" />
+          <p className="text-xs text-muted-foreground">Separate multiple tags with commas (e.g., react, hooks, javascript)</p>
         </div>
-
         <div className="space-y-4">
           <Label>Organization</Label>
           <Tabs value={organizationType} onValueChange={setOrganizationType}>
@@ -205,54 +177,33 @@ export default function SnippetEditor({ snippet, isEditing = false }) {
               <TabsTrigger value="folder">Folder</TabsTrigger>
               <TabsTrigger value="project">Project</TabsTrigger>
             </TabsList>
-            
             <TabsContent value="folder" className="mt-4">
-              <Select
-                value={formData.folder_id || ''}
-                onValueChange={(value) => handleOrganizationChange('folder', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a folder" />
-                </SelectTrigger>
+              <Select value={folderId} onValueChange={(value) => handleOrganizationChange('folder', value)}>
+                <SelectTrigger><SelectValue placeholder="Select a folder" /></SelectTrigger>
                 <SelectContent>
-                  {folders.map((folder) => (
-                    <SelectItem key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </SelectItem>
-                  ))}
+                  {folders.map((folder) => (<SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>))}
                 </SelectContent>
               </Select>
             </TabsContent>
-            
             <TabsContent value="project" className="mt-4">
-              <Select
-                value={formData.project_id || ''}
-                onValueChange={(value) => handleOrganizationChange('project', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a project" />
-                </SelectTrigger>
+              <Select value={projectId} onValueChange={(value) => handleOrganizationChange('project', value)}>
+                <SelectTrigger><SelectValue placeholder="Select a project" /></SelectTrigger>
                 <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
+                  {projects.map((project) => (<SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>))}
                 </SelectContent>
               </Select>
             </TabsContent>
           </Tabs>
         </div>
-
         <div className="space-y-2">
           <Label htmlFor="code">Code *</Label>
           <div className="border rounded-md overflow-hidden">
             <MonacoEditor
               height="400px"
-              language={formData.language}
+              language={selectedLanguageSlug}
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
-              value={formData.code}
-              onChange={(value) => setFormData(prev => ({ ...prev, code: value || '' }))}
+              value={code}
+              onChange={(value) => setCode(value || '')}
               options={{
                 minimap: { enabled: false },
                 fontSize: 14,
@@ -266,19 +217,9 @@ export default function SnippetEditor({ snippet, isEditing = false }) {
             />
           </div>
         </div>
-
         <div className="flex items-center justify-between pt-6 border-t">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(-1)}
-          >
-            Cancel
-          </Button>
-          
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : (isEditing ? 'Update Snippet' : 'Create Snippet')}
-          </Button>
+          <Button type="button" variant="outline" onClick={() => navigate(-1)}>Cancel</Button>
+          <Button type="submit" disabled={loading}>{loading ? 'Saving...' : (isEditing ? 'Update Snippet' : 'Create Snippet')}</Button>
         </div>
       </form>
     </div>

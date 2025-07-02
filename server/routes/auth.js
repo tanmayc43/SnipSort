@@ -1,7 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/database');
 const { body } = require('express-validator');
 const { handleValidationErrors } = require('../middleware/validation');
@@ -14,103 +13,114 @@ const generateToken = (userId) => {
   });
 };
 
-// Register
+// POST /api/auth/register
 router.post('/register', [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('email').isEmail().withMessage('A valid email is required.'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.'),
   handleValidationErrors
 ], async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  try{
+    const { email, password, fullName } = req.body;
 
-    // Check if user already exists
+    // checking if user exists already (case-insensitive)
     const existingUser = await pool.query(
-      'SELECT id FROM profiles WHERE email = $1',
+      'SELECT id FROM auth_users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
 
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: 'User already exists' });
+    if(existingUser.rows.length > 0){
+      return res.status(400).json({ message: 'An account with this email already exists.' });
     }
 
-    // Hash password
+    // hashing the password with bcrypt
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create user
-    const userId = uuidv4();
-    
+    // using transaction to ensure atomicity
     await pool.query('BEGIN');
     
-    // Insert into auth table (simulating Supabase auth)
-    await pool.query(
-      'INSERT INTO auth_users (id, email, encrypted_password, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
-      [userId, email, hashedPassword]
+    // inserting into auth_users and then get the new user's ID
+    const newUserResult = await pool.query(
+      'INSERT INTO auth_users (email, encrypted_password) VALUES ($1, $2) RETURNING id',
+      [email, hashedPassword]
     );
+    const userId = newUserResult.rows[0].id;
 
-    // Insert into profiles
+    // now inserting into profiles table (email is no longer here)
     await pool.query(
-      'INSERT INTO profiles (id, email, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())',
-      [userId, email]
+      'INSERT INTO profiles (id, full_name) VALUES ($1, $2)',
+      [userId, fullName] // fullName can be null if not provided
     );
 
     await pool.query('COMMIT');
 
+    // generating jwt and sending the response
     const token = generateToken(userId);
 
     res.status(201).json({
-      success: true,
-      data: {
-        user: { id: userId, email },
-        token
-      }
+      message: 'Registration successful.',
+      token,
+      user: { id: userId, email, fullName }
     });
-  } catch (error) {
+  }
+  catch(error){
     await pool.query('ROLLBACK');
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('Registration error:', error.message);
+    res.status(500).json({ message: 'Server error during registration.' });
   }
 });
 
-// Login
+// POST /api/auth/login
 router.post('/login', [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('password').notEmpty().withMessage('Password is required'),
+  body('email').isEmail().withMessage('A valid email is required.'),
+  body('password').notEmpty().withMessage('Password is required.'),
   handleValidationErrors
 ], async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Get user with password
+    // finding the user by email (case-insensitive)
     const userResult = await pool.query(
-      'SELECT au.id, au.email, au.encrypted_password FROM auth_users au WHERE au.email = $1',
+      'SELECT id, email, encrypted_password FROM auth_users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
 
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if(userResult.rows.length === 0){
+      return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
     const user = userResult.rows[0];
 
-    // Verify password
+    // verifying the password
     const isValidPassword = await bcrypt.compare(password, user.encrypted_password);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if(!isValidPassword){
+      return res.status(401).json({ message: 'Invalid credentials.' });
     }
+    
+    // fetch the user's profile information to return
+    const profileResult = await pool.query(
+        'SELECT full_name, avatar_url FROM profiles WHERE id = $1',
+        [user.id]
+    );
+    const profile = profileResult.rows[0] || {};
 
+    // generating jwt and sending the response along with user data
     const token = generateToken(user.id);
 
     res.json({
-      success: true,
-      data: {
-        user: { id: user.id, email: user.email },
-        token
+      message: 'Login successful.',
+      token,
+      user: { 
+        id: user.id, 
+        email: user.email,
+        fullName: profile.full_name,
+        avatarUrl: profile.avatar_url
       }
     });
-  } catch (error) {
+  }
+  catch(error){
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ message: 'Server error during login.' });
   }
 });
 

@@ -24,7 +24,9 @@ export const routes = [
       { path: 'snippet/:id', element: SnippetView },
       { path: 'snippet/:id/edit', element: EditSnippet },
       { path: 'folders', element: Folders },
+      { path: 'folders/:id', element: Folders },
       { path: 'projects', element: Projects },
+      { path: 'projects/:id', element: Projects },
     ]
   },
 ];

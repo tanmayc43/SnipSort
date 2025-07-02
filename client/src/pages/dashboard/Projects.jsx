@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,10 +12,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { projectService } from '@/lib/supabase'
+import { projectApi, snippetApi } from '@/lib/api'
 import { UserAuth } from '@/context/AuthContext'
-import { Plus, Users, Edit, Trash2, MoreVertical, Crown } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { Plus, Users, Edit, Trash2, MoreVertical, Crown, ArrowLeft, Code, UserPlus, Shield, User } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,36 +23,115 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import SnippetCard from '@/components/snippets/SnippetCard'
 
 export default function Projects() {
   const { session } = UserAuth()
-  const { toast } = useToast()
+  const { id: projectId } = useParams()
+  const navigate = useNavigate()
+  
+  console.log('Projects component rendered:', { 
+    projectId, 
+    hasSession: !!session, 
+    userId: session?.user?.id,
+    token: session?.access_token ? 'present' : 'missing',
+    sessionKeys: session ? Object.keys(session) : [],
+    userKeys: session?.user ? Object.keys(session.user) : []
+  })
+  
   const [projects, setProjects] = useState([])
+  const [currentProject, setCurrentProject] = useState(null)
+  const [projectSnippets, setProjectSnippets] = useState([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProject, setEditingProject] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     color: '#10B981',
     is_public: false
   })
+  
+  // Member management state
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false)
+  const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false)
+  const [newMemberData, setNewMemberData] = useState({
+    email: '',
+    role: 'member'
+  })
 
   useEffect(() => {
-    loadProjects()
-  }, [])
+    console.log('Projects useEffect triggered:', { projectId, hasCurrentProject: !!currentProject })
+    if (projectId) {
+      loadProjectDetails()
+    } else {
+      loadProjects()
+    }
+  }, [projectId])
+
+  // Add focus event listener to refresh data when user returns to the page
+  useEffect(() => {
+    const handleFocus = () => {
+      if (projectId && !isDeleting) {
+        loadProjectDetails()
+      }
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [projectId, isDeleting])
+
+  // Also refresh when the component becomes visible (for mobile/background tabs)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && projectId && !isDeleting) {
+        loadProjectDetails()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [projectId, isDeleting])
 
   const loadProjects = async () => {
     try {
-      const data = await projectService.getProjects(session.user.id)
+      const data = await projectApi.getAll(session?.access_token)
       setProjects(data)
     } catch (error) {
       console.error('Error loading projects:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load projects. Please try again.",
-        variant: "destructive",
-      })
+      toast.error('Error loading projects', { description: 'Failed to load projects. Please try again.' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadProjectDetails = async () => {
+    try {
+      setLoading(true)
+      console.log('Loading project details for projectId:', projectId)
+      
+      const [projectData, snippetsData] = await Promise.all([
+        projectApi.getById(projectId, session?.access_token),
+        snippetApi.getByProject(projectId)
+      ])
+      
+      console.log('Project data:', projectData)
+      console.log('Project members:', projectData.members)
+      console.log('Snippets for this project:', snippetsData)
+      
+      setCurrentProject(projectData)
+      setProjectSnippets(snippetsData)
+    } catch (error) {
+      console.error('Error loading project details:', error)
+      toast.error('Error loading project', { description: 'Failed to load project details. Please try again.' })
     } finally {
       setLoading(false)
     }
@@ -61,34 +140,29 @@ export default function Projects() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Project name is required.",
-        variant: "destructive",
-      })
+      toast.error('Validation Error', { description: 'Project name is required.' })
       return
     }
 
     try {
       const projectData = {
-        ...formData,
-        owner_id: session.user.id
+        name: formData.name,
+        description: formData.description,
+        color: formData.color,
+        is_public: formData.is_public
       }
 
       if (editingProject) {
-        const updatedProject = await projectService.updateProject(editingProject.id, projectData)
+        const updatedProject = await projectApi.update(editingProject.id, projectData, session?.access_token)
         setProjects(prev => prev.map(p => p.id === editingProject.id ? updatedProject : p))
-        toast({
-          title: "Project updated",
-          description: "Your project has been updated successfully.",
-        })
+        if (currentProject && currentProject.id === editingProject.id) {
+          setCurrentProject(updatedProject)
+        }
+        toast.success('Project updated', { description: 'Your project has been updated successfully.' })
       } else {
-        const newProject = await projectService.createProject(projectData)
+        const newProject = await projectApi.create(projectData, session?.access_token)
         setProjects(prev => [...prev, newProject])
-        toast({
-          title: "Project created",
-          description: "Your project has been created successfully.",
-        })
+        toast.success('Project created', { description: 'Your project has been created successfully.' })
       }
 
       setDialogOpen(false)
@@ -96,11 +170,7 @@ export default function Projects() {
       setFormData({ name: '', description: '', color: '#10B981', is_public: false })
     } catch (error) {
       console.error('Error saving project:', error)
-      toast({
-        title: "Error",
-        description: `Failed to ${editingProject ? 'update' : 'create'} project. Please try again.`,
-        variant: "destructive",
-      })
+      toast.error('Error saving project', { description: `Failed to ${editingProject ? 'update' : 'create'} project. Please try again.` })
     }
   }
 
@@ -118,19 +188,18 @@ export default function Projects() {
   const handleDelete = async (projectId) => {
     if (window.confirm('Are you sure you want to delete this project? All snippets in this project will be moved to "Uncategorized".')) {
       try {
-        await projectService.deleteProject(projectId)
+        setIsDeleting(true)
+        await projectApi.delete(projectId, session?.access_token)
         setProjects(prev => prev.filter(p => p.id !== projectId))
-        toast({
-          title: "Project deleted",
-          description: "The project has been successfully deleted.",
-        })
+        if (currentProject && currentProject.id === projectId) {
+          navigate('/dashboard/projects')
+        }
+        toast.success('Project deleted', { description: 'The project has been successfully deleted.' })
       } catch (error) {
         console.error('Error deleting project:', error)
-        toast({
-          title: "Failed to delete",
-          description: "Could not delete the project. Please try again.",
-          variant: "destructive",
-        })
+        toast.error('Failed to delete', { description: 'Could not delete the project. Please try again.' })
+      } finally {
+        setIsDeleting(false)
       }
     }
   }
@@ -146,10 +215,430 @@ export default function Projects() {
   }
 
   const getUserRole = (project) => {
-    const member = project.project_members?.find(m => m.user_id === session.user.id)
+    // Check if project has members array (from backend) or project_members (from list view)
+    const members = project.members || project.project_members || []
+    const member = members.find(m => m.userId === session.user.id || m.user_id === session.user.id)
     return member?.role || 'member'
   }
 
+  const canManageProject = (project) => {
+    const role = getUserRole(project)
+    return role === 'owner' || role === 'admin'
+  }
+
+  const canManageMembers = (project) => {
+    const role = getUserRole(project)
+    return role === 'owner' || role === 'admin'
+  }
+
+  const canEditSnippets = (project) => {
+    const role = getUserRole(project)
+    return role === 'owner' || role === 'admin'
+  }
+
+  const handleAddMember = async (e) => {
+    e.preventDefault()
+    if (!newMemberData.email.trim()) {
+      toast.error('Validation Error', { description: 'Email is required.' })
+      return
+    }
+
+    try {
+      await projectApi.addMember(projectId, newMemberData.email, newMemberData.role, session?.access_token)
+      setAddMemberDialogOpen(false)
+      setNewMemberData({ email: '', role: 'member' })
+      loadProjectDetails() // Refresh to get updated member list
+      toast.success('Member added', { description: 'The member has been added to the project successfully.' })
+    } catch (error) {
+      console.error('Error adding member:', error)
+      toast.error('Failed to add member', { description: error.message || 'Could not add member to the project.' })
+    }
+  }
+
+  const handleRemoveMember = async (memberId) => {
+    if (window.confirm('Are you sure you want to remove this member from the project?')) {
+      try {
+        await projectApi.removeMember(projectId, memberId, session?.access_token)
+        loadProjectDetails() // Refresh to get updated member list
+        toast.success('Member removed', { description: 'The member has been removed from the project.' })
+      } catch (error) {
+        console.error('Error removing member:', error)
+        toast.error('Failed to remove member', { description: error.message || 'Could not remove member from the project.' })
+      }
+    }
+  }
+
+  const getRoleIcon = (role) => {
+    switch (role) {
+      case 'owner':
+        return <Crown className="h-4 w-4 text-yellow-500" />
+      case 'admin':
+        return <Shield className="h-4 w-4 text-blue-500" />
+      case 'member':
+        return <User className="h-4 w-4 text-gray-500" />
+      default:
+        return <User className="h-4 w-4 text-gray-500" />
+    }
+  }
+
+  const getRoleLabel = (role) => {
+    switch (role) {
+      case 'owner':
+        return 'Owner'
+      case 'admin':
+        return 'Admin'
+      case 'member':
+        return 'Member'
+      default:
+        return 'Member'
+    }
+  }
+
+  // Project Detail View
+  if (projectId && currentProject) {
+    console.log('Rendering project detail view for:', projectId, currentProject)
+    return (
+      <div className="p-6">
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/projects')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Projects
+          </Button>
+          <div
+            className="w-4 h-4 rounded-full"
+            style={{ backgroundColor: currentProject.color }}
+          />
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">{currentProject.name}</h1>
+            {currentProject.description && (
+              <p className="text-muted-foreground">{currentProject.description}</p>
+            )}
+            <div className="flex items-center gap-2 mt-2">
+              {getRoleIcon(getUserRole(currentProject))}
+              <span className="text-sm text-muted-foreground">
+                {getRoleLabel(getUserRole(currentProject))}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {canManageMembers(currentProject) && (
+              <Button variant="outline" onClick={() => setMembersDialogOpen(true)}>
+                <Users className="h-4 w-4 mr-2" />
+                Members
+              </Button>
+            )}
+            {canManageProject(currentProject) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleEdit(currentProject)}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Project
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => handleDelete(currentProject.id)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Project
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-32 bg-muted rounded-lg animate-pulse"></div>
+            ))}
+          </div>
+        ) : projectSnippets.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="mx-auto w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
+              <Code className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No snippets in this project</h3>
+            <p className="text-muted-foreground mb-4">
+              {canEditSnippets(currentProject) 
+                ? 'Create your first snippet in this project'
+                : 'No snippets have been added to this project yet'
+              }
+            </p>
+            {canEditSnippets(currentProject) && (
+              <Button asChild>
+                <Link to="/dashboard/snippet/new">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Snippet
+                </Link>
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projectSnippets.map((snippet) => (
+              <SnippetCard
+                key={snippet.id}
+                snippet={snippet}
+                onDelete={canEditSnippets(currentProject) ? async (snippetId) => {
+                  try {
+                    await snippetApi.delete(snippetId)
+                    setProjectSnippets(prev => prev.filter(s => s.id !== snippetId))
+                  } catch (error) {
+                    throw error
+                  }
+                } : undefined}
+                onToggleFavorite={canEditSnippets(currentProject) ? async (snippetId, isCurrentlyFavorite) => {
+                  try {
+                    const updatedSnippet = await snippetApi.update(snippetId, { is_favorite: !isCurrentlyFavorite })
+                    setProjectSnippets(prev => prev.map(s => (s.id === snippetId ? updatedSnippet : s)))
+                  } catch (error) {
+                    throw error
+                  }
+                } : undefined}
+                readOnly={!canEditSnippets(currentProject)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Members Dialog */}
+        <Dialog open={membersDialogOpen} onOpenChange={setMembersDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Project Members</DialogTitle>
+              <DialogDescription>
+                Manage who has access to this project and their roles.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Current Members</h3>
+                {canManageMembers(currentProject) && (
+                  <Button onClick={() => setAddMemberDialogOpen(true)}>
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Add Member
+                  </Button>
+                )}
+              </div>
+              
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {(currentProject.members || []).map((member) => (
+                  <div key={member.userId} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {getRoleIcon(member.role)}
+                      <div>
+                        <p className="font-medium">{member.fullName || 'Unknown User'}</p>
+                        <p className="text-sm text-muted-foreground">{member.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {getRoleLabel(member.role)}
+                      </span>
+                      {canManageMembers(currentProject) && member.userId !== session.user.id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveMember(member.userId)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {(currentProject.members || []).length === 0 && (
+                  <div className="text-center py-4 text-muted-foreground">
+                    No members found
+                  </div>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Member Dialog */}
+        <Dialog open={addMemberDialogOpen} onOpenChange={setAddMemberDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Member</DialogTitle>
+              <DialogDescription>
+                Invite a new member to this project by their email address.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddMember}>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newMemberData.email}
+                    onChange={(e) => setNewMemberData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="user@example.com"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Select
+                    value={newMemberData.role}
+                    onValueChange={(value) => setNewMemberData(prev => ({ ...prev, role: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">Member (View only)</SelectItem>
+                      <SelectItem value="admin">Admin (Manage members & edit)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter className="mt-6">
+                <Button type="button" variant="outline" onClick={() => setAddMemberDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Add Member
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Project Dialog */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingProject ? 'Edit Project' : 'Create New Project'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingProject 
+                  ? 'Update your project details below.'
+                  : 'Create a new project to collaborate with others.'
+                }
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit}>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Enter project name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Brief description (optional)"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="color">Color</Label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="color"
+                      id="color"
+                      value={formData.color}
+                      onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
+                      className="w-12 h-10 rounded border border-input"
+                    />
+                    <Input
+                      value={formData.color}
+                      onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
+                      placeholder="#10B981"
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="is_public"
+                    checked={formData.is_public}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_public: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <Label htmlFor="is_public">Make this project public</Label>
+                </div>
+              </div>
+              <DialogFooter className="mt-6">
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  {editingProject ? 'Update' : 'Create'} Project
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    )
+  }
+
+  // Show loading state when we have a projectId but no currentProject yet
+  if (projectId && !currentProject && loading) {
+    console.log('Loading project details...')
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-muted rounded w-1/4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-32 bg-muted rounded-lg"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state when we have a projectId but failed to load
+  if (projectId && !currentProject && !loading) {
+    console.log('Failed to load project details, showing error state')
+    return (
+      <div className="p-6">
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/projects')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Projects
+          </Button>
+        </div>
+        <div className="text-center py-12">
+          <div className="mx-auto w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
+            <Users className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Project not found</h3>
+          <p className="text-muted-foreground mb-4">
+            The project you're looking for doesn't exist or you don't have access to it.
+          </p>
+          <Button onClick={() => navigate('/dashboard/projects')}>
+            Back to Projects
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Project List View
   if (loading) {
     return (
       <div className="p-6">
@@ -240,7 +729,7 @@ export default function Projects() {
                     onChange={(e) => setFormData(prev => ({ ...prev, is_public: e.target.checked }))}
                     className="rounded"
                   />
-                  <Label htmlFor="is_public">Make project public</Label>
+                  <Label htmlFor="is_public">Make this project public</Label>
                 </div>
               </div>
               <DialogFooter className="mt-6">
@@ -263,7 +752,7 @@ export default function Projects() {
           </div>
           <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
           <p className="text-muted-foreground mb-4">
-            Create your first project to start collaborating
+            Create your first project to collaborate with others
           </p>
           <Button onClick={openCreateDialog}>
             <Plus className="h-4 w-4 mr-2" />
@@ -288,24 +777,25 @@ export default function Projects() {
                       to={`/dashboard/projects/${project.id}`}
                       className="block"
                     >
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold text-foreground hover:text-primary transition-colors truncate">
-                          {project.name}
-                        </h3>
-                        {isOwner(project) && (
-                          <Crown className="h-3 w-3 text-yellow-500 flex-shrink-0" />
-                        )}
-                      </div>
+                      <h3 className="font-semibold text-foreground hover:text-primary transition-colors truncate">
+                        {project.name}
+                      </h3>
                     </Link>
                     {project.description && (
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                         {project.description}
                       </p>
                     )}
+                    <div className="flex items-center gap-2 mt-2">
+                      {getRoleIcon(getUserRole(project))}
+                      <span className="text-xs text-muted-foreground">
+                        {getRoleLabel(getUserRole(project))}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {isOwner(project) && (
+                {canManageProject(project) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
@@ -330,18 +820,8 @@ export default function Projects() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <div className="flex items-center space-x-2">
-                  <span className="capitalize">{getUserRole(project)}</span>
-                  {project.is_public && (
-                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                      Public
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs">
-                  Created {new Date(project.created_at).toLocaleDateString()}
-                </span>
+              <div className="text-sm text-muted-foreground">
+                Created {new Date(project.created_at).toLocaleDateString()}
               </div>
             </div>
           ))}

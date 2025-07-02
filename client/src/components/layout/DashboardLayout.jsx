@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,10 +25,14 @@ import {
 
 export default function DashboardLayout() {
   const { session, signOutUser } = UserAuth()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const stored = localStorage.getItem('sidebarOpen');
+    return stored === null ? true : stored === 'true';
+  })
   const [searchQuery, setSearchQuery] = useState('')
   const location = useLocation()
   const navigate = useNavigate()
+  const sidebarRef = useRef(null)
 
   const handleSignOut = async () => {
     try {
@@ -44,6 +48,10 @@ export default function DashboardLayout() {
     if (searchQuery.trim()) {
       navigate(`/dashboard/search?q=${encodeURIComponent(searchQuery.trim())}`)
     }
+  }
+
+  const handleSidebarLinkClick = () => {
+    if (window.innerWidth < 1024) setSidebarOpen(false)
   }
 
   const sidebarItems = [
@@ -67,82 +75,91 @@ export default function DashboardLayout() {
     },
   ]
 
+  useEffect(() => {
+    localStorage.setItem('sidebarOpen', sidebarOpen);
+  }, [sidebarOpen]);
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+    <div className="min-h-screen bg-background flex">
+      {/* Sidebar overlay for mobile */}
+      {sidebarOpen && window.innerWidth < 1024 && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-
       {/* Sidebar */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="flex items-center justify-between h-16 px-4 border-b">
-          <Link to="/dashboard" className="flex items-center space-x-2">
-            <Code2 className="h-6 w-6 text-primary" />
-            <span className="text-lg font-semibold">SnipSort</span>
-          </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <nav className="flex-1 px-4 py-4 space-y-2">
-          {sidebarItems.map((item) => (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={`
-                flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-colors
-                ${item.active 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }
-              `}
+      {sidebarOpen && (
+        <div
+          ref={sidebarRef}
+          className={`
+            bg-card border-r transition-transform duration-200 ease-in-out
+            w-64
+            fixed inset-y-0 left-0 z-50
+            lg:static lg:z-auto lg:translate-x-0
+            ${sidebarOpen && window.innerWidth < 1024 ? 'translate-x-0' : window.innerWidth < 1024 ? '-translate-x-full' : ''}
+          `}
+          style={{ minWidth: '16rem' }}
+        >
+          <div className="flex items-center justify-between h-16 px-4 border-b">
+            <Link to="/dashboard" className="flex items-center space-x-2" onClick={handleSidebarLinkClick}>
+              <Code2 className="h-6 w-6 text-primary" />
+              <span className="text-lg font-semibold">SnipSort</span>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
               onClick={() => setSidebarOpen(false)}
             >
-              <item.icon className="h-4 w-4" />
-              <span>{item.name}</span>
-            </Link>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t">
-          <Button
-            variant="outline"
-            className="w-full justify-start"
-            onClick={() => navigate('/dashboard/snippet/new')}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Snippet
-          </Button>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <nav className="flex-1 px-4 py-4 space-y-2">
+            {sidebarItems.map((item) => (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`
+                  flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-colors
+                  ${item.active 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  }
+                `}
+                onClick={handleSidebarLinkClick}
+              >
+                <item.icon className="h-4 w-4" />
+                <span>{item.name}</span>
+              </Link>
+            ))}
+          </nav>
+          <div className="p-4 border-t">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => { handleSidebarLinkClick(); navigate('/dashboard/snippet/new') }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Snippet
+            </Button>
+          </div>
         </div>
-      </div>
-
+      )}
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="flex-1 flex flex-col transition-all duration-200">
         {/* Top navbar */}
         <header className="h-16 bg-background border-b flex items-center justify-between px-4">
           <div className="flex items-center space-x-4">
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(true)}
+              className="block"
+              onClick={() => setSidebarOpen((open) => !open)}
+              aria-label="Toggle sidebar"
             >
-              <Menu className="h-4 w-4" />
+              {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
-
             <form onSubmit={handleSearch} className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -154,10 +171,8 @@ export default function DashboardLayout() {
               />
             </form>
           </div>
-
           <div className="flex items-center space-x-4">
             <ToggleButton />
-            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -186,9 +201,8 @@ export default function DashboardLayout() {
             </DropdownMenu>
           </div>
         </header>
-
         {/* Page content */}
-        <main className="flex-1">
+        <main className="flex-1 p-4 sm:p-6 md:p-8">
           <Outlet />
         </main>
       </div>

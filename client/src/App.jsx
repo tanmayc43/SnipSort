@@ -2,16 +2,14 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from './components/theme-provider'
 import { AuthContextProvider } from './context/AuthContext'
-import { Toaster } from './components/ui/toaster'
+import { Toaster } from './components/ui/sonner'
 
-// Pages
 import Home from './pages/Home'
 import Login from './pages/Login'
 import SignUp from './pages/Signup'
 import DashboardLayout from './components/layout/DashboardLayout'
 import AllSnippets from './pages/dashboard/AllSnippets'
-import NewSnippet from './pages/dashboard/NewSnippet'
-import EditSnippet from './pages/dashboard/EditSnippet'
+import SnippetEditor from './components/snippets/SnippetEditor'
 import SnippetView from './pages/dashboard/SnippetView'
 import Folders from './pages/dashboard/Folders'
 import Projects from './pages/dashboard/Projects'
@@ -28,11 +26,13 @@ function App() {
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<AllSnippets />} />
               <Route path="snippets" element={<AllSnippets />} />
-              <Route path="snippet/new" element={<NewSnippet />} />
+              <Route path="snippet/new" element={<SnippetEditor />} />
               <Route path="snippet/:id" element={<SnippetView />} />
-              <Route path="snippet/:id/edit" element={<EditSnippet />} />
+              <Route path="snippet/:id/edit" element={<SnippetEditor />} />
               <Route path="folders" element={<Folders />} />
+              <Route path="folders/:id" element={<Folders />} />
               <Route path="projects" element={<Projects />} />
+              <Route path="projects/:id" element={<Projects />} />
             </Route>
           </Routes>
         </Router>

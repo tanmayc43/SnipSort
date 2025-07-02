@@ -1,15 +1,16 @@
 import { useState } from "react"
+import { Link, useNavigate } from 'react-router-dom'
+import { UserAuth } from "../context/AuthContext"
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Link, useNavigate } from 'react-router-dom'
 import { ToggleButton } from '@/components/ToggleButton'
-import { UserAuth } from "../context/AuthContext"
 import { useToast } from '@/hooks/use-toast'
 
 export default function SignUp() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [fullName, setFullName] = useState('')
     const [loading, setLoading] = useState(false)
     const navigate = useNavigate()
     const { signUpUser, signInWithGoogle } = UserAuth()
@@ -19,43 +20,48 @@ export default function SignUp() {
         e.preventDefault()
         setLoading(true)
 
-        try {
-            const result = await signUpUser(email, password)
-            if (result.success) {
+        try{
+            const result = await signUpUser(email, password, fullName)
+            if(result.success){
                 toast({
                     title: "Account created!",
                     description: "Welcome to SnipSort. You can now start organizing your code snippets.",
                 })
                 navigate('/dashboard')
-            } else {
+            }
+            else{
                 toast({
                     title: "Sign up failed",
                     description: result.error,
                     variant: "destructive",
                 })
             }
-        } catch (error) {
+        }
+        catch(error){
             toast({
                 title: "Sign up failed",
                 description: error.message,
                 variant: "destructive",
             })
-        } finally {
+        }
+        finally{
             setLoading(false)
         }
     }
 
+    // not implemented yet
     const handleGoogleSignIn = async () => {
-        try {
+        try{
             const result = await signInWithGoogle()
-            if (!result.success) {
+            if(!result.success){
                 toast({
                     title: "Google sign in failed",
                     description: result.error,
                     variant: "destructive",
                 })
             }
-        } catch (error) {
+        }
+        catch(error){
             toast({
                 title: "Google sign in failed",
                 description: error.message,
@@ -114,6 +120,21 @@ export default function SignUp() {
                         <hr className="my-4 border-dashed" />
 
                         <div className="space-y-5">
+                            <div className="space-y-2">
+                                <Label htmlFor="fullName" className="block text-sm">
+                                    Full Name
+                                </Label>
+                                <Input
+                                    type="text"
+                                    required
+                                    name="fullName"
+                                    id="fullName"
+                                    value={fullName}
+                                    onChange={(e) => setFullName(e.target.value)}
+                                    placeholder="Enter your full name"
+                                />
+                            </div>
+
                             <div className="space-y-2">
                                 <Label htmlFor="email" className="block text-sm">
                                     Email

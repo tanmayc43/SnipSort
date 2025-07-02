@@ -1,13 +1,13 @@
+import { useState } from "react"
+import { Link, useNavigate } from 'react-router-dom'
+import { UserAuth } from "../context/AuthContext"
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Link, useNavigate } from 'react-router-dom'
 import { ToggleButton } from '../components/ToggleButton'
-import { useState } from "react"
-import { UserAuth } from "../context/AuthContext"
 import { useToast } from '@/hooks/use-toast'
 
-export default function Login() {
+export default function Login(){
   const [form, setForm] = useState({ email: "", password: "" })
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -16,37 +16,41 @@ export default function Login() {
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
-  const handleLogin = async e => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     setLoading(true)
-    try {
+    try{
       const result = await signInUser(form.email, form.password)
-      if (result.success) {
+      if(result.success){
         toast({
           title: "Welcome back!",
           description: "You have been successfully signed in.",
         })
         navigate('/dashboard')
-      } else {
+      }
+      else{
         toast({
           title: "Sign in failed",
           description: result.error,
           variant: "destructive",
         })
       }
-    } catch (error) {
+    }
+    catch(error){
       toast({
         title: "Sign in failed",
         description: error.message,
         variant: "destructive",
       })
-    } finally {
+    }
+    finally{
       setLoading(false)
     }
   }
 
+  // not implemented yet
   const handleGoogleSignIn = async () => {
-    try {
+    try{
       const result = await signInWithGoogle()
       if (!result.success) {
         toast({
@@ -55,7 +59,8 @@ export default function Login() {
           variant: "destructive",
         })
       }
-    } catch (error) {
+    }
+    catch(error){
       toast({
         title: "Google sign in failed",
         description: error.message,

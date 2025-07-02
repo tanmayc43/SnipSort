@@ -5,275 +5,279 @@ const { snippetValidation, uuidValidation } = require('../middleware/validation'
 
 const router = express.Router();
 
-// Get all snippets for authenticated user
+// manage tags within a transaction
+const manageTags = async (client, snippetId, tags) => {
+  await client.query('DELETE FROM snippet_tags WHERE snippet_id = $1', [snippetId]);
+
+  if(tags && tags.length > 0){
+    // ensuring tags are unique and lowercase
+    const uniqueTags = [...new Set(tags.map(t => String(t).toLowerCase().trim()))];
+    
+    const tagQuery = 'INSERT INTO snippet_tags (snippet_id, tag) SELECT $1, unnest($2::text[])';
+    await client.query(tagQuery, [snippetId, uniqueTags]);
+  }
+};
+
+// GET /api/snippets - get all snippets user has access to (own + project snippets)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { search, language, sort = 'updated_at' } = req.query;
-    const userId = req.user.id;
+    const userId = req.user.userId;
+    const { search, language_slug, sort = 'updated_at', favorite, folder_id, project_id } = req.query;
 
     let query = `
-      SELECT 
-        s.*,
+      SELECT
+        s.id, s.title, s.description, s.is_favorite, s.is_public, s.updated_at, s.created_at,
+        s.folder_id, s.project_id,
+        l.name as language_name,
+        l.slug as language_slug,
         f.name as folder_name,
-        f.color as folder_color,
         p.name as project_name,
-        p.color as project_color,
-        COALESCE(
-          json_agg(
-            CASE WHEN st.tag IS NOT NULL 
-            THEN json_build_object('tag', st.tag)
-            ELSE NULL END
-          ) FILTER (WHERE st.tag IS NOT NULL), 
-          '[]'
-        ) as snippet_tags
+        (SELECT json_agg(st.tag) FROM snippet_tags st WHERE st.snippet_id = s.id) as tags
       FROM snippets s
+      LEFT JOIN languages l ON s.language_id = l.id
       LEFT JOIN folders f ON s.folder_id = f.id
       LEFT JOIN projects p ON s.project_id = p.id
-      LEFT JOIN snippet_tags st ON s.id = st.snippet_id
-      WHERE s.user_id = $1
+      WHERE s.id IN (
+        -- Select all snippets owned by the user OR in projects the user is a member of
+        SELECT id FROM snippets WHERE user_id = $1
+        UNION
+        SELECT s.id FROM snippets s JOIN project_members pm ON s.project_id = pm.project_id WHERE pm.user_id = $1
+      )
     `;
 
     const params = [userId];
     let paramCount = 1;
 
-    // Add search filter
-    if (search) {
-      paramCount++;
-      query += ` AND (
-        s.title ILIKE $${paramCount} OR 
-        s.description ILIKE $${paramCount} OR 
-        s.code ILIKE $${paramCount}
-      )`;
+    if(search){
+      paramCount+=1;
+      query += ` AND (s.title ILIKE $${paramCount} OR s.description ILIKE $${paramCount})`;
       params.push(`%${search}%`);
     }
 
-    // Add language filter
-    if (language && language !== 'all') {
-      paramCount++;
-      query += ` AND s.language = $${paramCount}`;
-      params.push(language);
+    if(language_slug){
+      paramCount+=1;
+      query += ` AND l.slug = $${paramCount}`;
+      params.push(language_slug);
     }
 
-    query += ` GROUP BY s.id, f.name, f.color, p.name, p.color`;
+    if(folder_id){
+      paramCount+=1;
+      query += ` AND s.folder_id = $${paramCount}`;
+      params.push(folder_id);
+    }
 
-    // Add sorting
-    const validSorts = ['updated_at', 'created_at', 'title', 'language'];
-    const sortField = validSorts.includes(sort) ? sort : 'updated_at';
-    query += ` ORDER BY s.${sortField} DESC`;
+    if(project_id){
+      paramCount+=1;
+      query += ` AND s.project_id = $${paramCount}`;
+      params.push(project_id);
+    }
+
+    if(favorite === 'true'){
+      query += ` AND s.is_favorite = true`;
+    }
+
+    //sorting the snippets
+    const validSorts = ['updated_at', 'created_at', 'title'];
+    const sortField = validSorts.includes(sort) ? `s.${sort}` : 's.updated_at';
+    query += ` ORDER BY ${sortField} DESC`;
 
     const result = await pool.query(query, params);
-
-    res.json({
-      success: true,
-      data: result.rows
-    });
-  } catch (error) {
-    console.error('Get snippets error:', error);
-    res.status(500).json({ error: 'Failed to fetch snippets' });
+    res.json(result.rows);
+  }
+  catch(error){
+    console.error('Get snippets error:', error.message);
+    res.status(500).json({ message: 'Server error while fetching snippets.' });
   }
 });
 
-// Get single snippet
+// GET /api/snippets/:id - get a single snippet by ID
 router.get('/:id', authenticateToken, uuidValidation, async (req, res) => {
-  try {
+  try{
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const result = await pool.query(`
       SELECT 
         s.*,
+        l.name as language_name,
+        l.slug as language_slug,
         f.name as folder_name,
-        f.color as folder_color,
         p.name as project_name,
-        p.color as project_color,
-        COALESCE(
-          json_agg(
-            CASE WHEN st.tag IS NOT NULL 
-            THEN json_build_object('tag', st.tag)
-            ELSE NULL END
-          ) FILTER (WHERE st.tag IS NOT NULL), 
-          '[]'
-        ) as snippet_tags
+        (SELECT json_agg(st.tag) FROM snippet_tags st WHERE st.snippet_id = s.id) as tags
       FROM snippets s
+      LEFT JOIN languages l ON s.language_id = l.id
       LEFT JOIN folders f ON s.folder_id = f.id
       LEFT JOIN projects p ON s.project_id = p.id
-      LEFT JOIN snippet_tags st ON s.id = st.snippet_id
       WHERE s.id = $1 AND (
-        s.user_id = $2 OR 
-        s.is_public = true OR
-        (s.project_id IS NOT NULL AND EXISTS (
-          SELECT 1 FROM project_members pm 
-          WHERE pm.project_id = s.project_id AND pm.user_id = $2
-        ))
-      )
-      GROUP BY s.id, f.name, f.color, p.name, p.color
-    `, [id, userId]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Snippet not found' });
-    }
-
-    res.json({
-      success: true,
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Get snippet error:', error);
-    res.status(500).json({ error: 'Failed to fetch snippet' });
-  }
-});
-
-// Create snippet
-router.post('/', authenticateToken, snippetValidation, async (req, res) => {
-  try {
-    const { title, description, code, language, folder_id, project_id, is_favorite, is_public } = req.body;
-    const userId = req.user.id;
-
-    // Validate folder/project ownership
-    if (folder_id) {
-      const folderCheck = await pool.query(
-        'SELECT id FROM folders WHERE id = $1 AND user_id = $2',
-        [folder_id, userId]
-      );
-      if (folderCheck.rows.length === 0) {
-        return res.status(400).json({ error: 'Invalid folder' });
-      }
-    }
-
-    if (project_id) {
-      const projectCheck = await pool.query(
-        'SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2',
-        [project_id, userId]
-      );
-      if (projectCheck.rows.length === 0) {
-        return res.status(400).json({ error: 'Invalid project or no access' });
-      }
-    }
-
-    const result = await pool.query(`
-      INSERT INTO snippets (user_id, title, description, code, language, folder_id, project_id, is_favorite, is_public)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *
-    `, [userId, title, description || '', code, language, folder_id, project_id, is_favorite || false, is_public || false]);
-
-    res.status(201).json({
-      success: true,
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Create snippet error:', error);
-    res.status(500).json({ error: 'Failed to create snippet' });
-  }
-});
-
-// Update snippet
-router.put('/:id', authenticateToken, uuidValidation, snippetValidation, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { title, description, code, language, folder_id, project_id, is_favorite, is_public } = req.body;
-    const userId = req.user.id;
-
-    // Check ownership or project access
-    const snippetCheck = await pool.query(`
-      SELECT s.* FROM snippets s
-      WHERE s.id = $1 AND (
+        s.is_public = true OR 
         s.user_id = $2 OR
         (s.project_id IS NOT NULL AND EXISTS (
-          SELECT 1 FROM project_members pm 
-          WHERE pm.project_id = s.project_id AND pm.user_id = $2
+          SELECT 1 FROM project_members pm WHERE pm.project_id = s.project_id AND pm.user_id = $2
         ))
       )
     `, [id, userId]);
 
-    if (snippetCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Snippet not found or no access' });
+    if(result.rows.length === 0){
+      return res.status(404).json({ message: 'Snippet not found or you do not have permission to view it.' });
     }
 
-    const result = await pool.query(`
+    res.json(result.rows[0]);
+  }
+  catch(error){
+    console.error('Get single snippet error:', error.message);
+    res.status(500).json({ message: 'Server error while fetching the snippet.' });
+  }
+});
+
+// POST /api/snippets - create a new snippet
+router.post('/', authenticateToken, snippetValidation, async (req, res) => {
+  const client = await pool.connect();
+  try{
+    const { title, description, code, language_id, folder_id, project_id, is_favorite, is_public, tags } = req.body;
+    const userId = req.user.userId;
+
+    await client.query('BEGIN');
+
+    // if creating in a project, check if user is a member
+    if(project_id){
+      const memberCheck = await client.query(`
+        SELECT role FROM project_members 
+        WHERE project_id = $1 AND user_id = $2
+      `, [project_id, userId]);
+
+      if(memberCheck.rows.length === 0){
+        await client.query('ROLLBACK');
+        return res.status(403).json({ message: 'You must be a member of the project to create snippets in it.' });
+      }
+    }
+
+    const snippetResult = await client.query(`
+      INSERT INTO snippets (user_id, title, description, code, language_id, folder_id, project_id, is_favorite, is_public)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [userId, title, description, code, language_id, folder_id, project_id, is_favorite, is_public]);
+    
+    const newSnippet = snippetResult.rows[0];
+
+    // helper to add tags
+    await manageTags(client, newSnippet.id, tags);
+
+    await client.query('COMMIT');
+
+    // refetch the snippet with all its relations to return to the client
+    const finalResult = await client.query('SELECT * FROM snippets WHERE id = $1', [newSnippet.id]);
+    res.status(201).json(finalResult.rows[0]);
+
+  }
+  catch(error){
+    await client.query('ROLLBACK');
+    console.error('Create snippet error:', error);
+    res.status(500).json({ message: 'Failed to create snippet.' });
+  } 
+  finally{
+    client.release();
+  }
+});
+
+// PUT /api/snippets/:id - update a snippet
+router.put('/:id', authenticateToken, uuidValidation, snippetValidation, async (req, res) => {
+  const client = await pool.connect();
+  try{
+    const { id } = req.params;
+    const { title, description, code, language_id, folder_id, project_id, is_favorite, is_public, tags } = req.body;
+    const userId = req.user.userId;
+
+    await client.query('BEGIN');
+
+    // getting the snippet to check permissions
+    const snippetCheck = await client.query(`
+      SELECT s.*, pm.role as user_role
+      FROM snippets s
+      LEFT JOIN project_members pm ON s.project_id = pm.project_id AND pm.user_id = $1
+      WHERE s.id = $2
+    `, [userId, id]);
+
+    if(snippetCheck.rows.length === 0){
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Snippet not found.' });
+    }
+
+    const snippet = snippetCheck.rows[0];
+    const userRole = snippet.user_role;
+
+    // check whether user can edit: owner of snippet OR admin/owner of project
+    const canEdit = snippet.user_id === userId || (snippet.project_id && userRole && ['owner', 'admin'].includes(userRole));
+
+    if(!canEdit){
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'You do not have permission to edit this snippet.' });
+    }
+
+    const snippetResult = await client.query(`
       UPDATE snippets 
-      SET title = $1, description = $2, code = $3, language = $4, 
+      SET title = $1, description = $2, code = $3, language_id = $4, 
           folder_id = $5, project_id = $6, is_favorite = $7, is_public = $8, updated_at = NOW()
       WHERE id = $9
       RETURNING *
-    `, [title, description || '', code, language, folder_id, project_id, is_favorite || false, is_public || false, id]);
+    `, [title, description, code, language_id, folder_id, project_id, is_favorite, is_public, id]);
 
-    res.json({
-      success: true,
-      data: result.rows[0]
-    });
-  } catch (error) {
+    const updatedSnippet = snippetResult.rows[0];
+
+    // helper to update tags
+    await manageTags(client, updatedSnippet.id, tags);
+    await client.query('COMMIT');
+    
+    res.json(updatedSnippet);
+
+  }
+  catch(error){
+    await client.query('ROLLBACK');
     console.error('Update snippet error:', error);
-    res.status(500).json({ error: 'Failed to update snippet' });
+    res.status(500).json({ message: 'Failed to update snippet.' });
+  }
+  finally{
+    client.release();
   }
 });
 
-// Delete snippet
+// DELETE /api/snippets/:id - delete a snippet
 router.delete('/:id', authenticateToken, uuidValidation, async (req, res) => {
-  try {
+  try{
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user.userId;
+
+    // get the snippet to check permissions
+    const snippetCheck = await pool.query(`
+      SELECT s.*, pm.role as user_role
+      FROM snippets s
+      LEFT JOIN project_members pm ON s.project_id = pm.project_id AND pm.user_id = $1
+      WHERE s.id = $2
+    `, [userId, id]);
+
+    if(snippetCheck.rows.length === 0){
+      return res.status(404).json({ message: 'Snippet not found.' });
+    }
+
+    const snippet = snippetCheck.rows[0];
+    const userRole = snippet.user_role;
+
+    // check whether user can delete: owner of snippet OR admin/owner of project
+    const canDelete = snippet.user_id === userId || (snippet.project_id && userRole && ['owner', 'admin'].includes(userRole));
+
+    if(!canDelete){
+      return res.status(403).json({ message: 'You do not have permission to delete this snippet.' });
+    }
 
     const result = await pool.query(
-      'DELETE FROM snippets WHERE id = $1 AND user_id = $2 RETURNING id',
-      [id, userId]
+      'DELETE FROM snippets WHERE id = $1 RETURNING id',
+      [id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Snippet not found' });
-    }
-
-    res.json({
-      success: true,
-      message: 'Snippet deleted successfully'
-    });
-  } catch (error) {
-    console.error('Delete snippet error:', error);
-    res.status(500).json({ error: 'Failed to delete snippet' });
+    res.status(204).send();
   }
-});
-
-// Add tags to snippet
-router.post('/:id/tags', authenticateToken, uuidValidation, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { tags } = req.body;
-    const userId = req.user.id;
-
-    if (!Array.isArray(tags) || tags.length === 0) {
-      return res.status(400).json({ error: 'Tags array is required' });
-    }
-
-    // Check snippet ownership
-    const snippetCheck = await pool.query(
-      'SELECT id FROM snippets WHERE id = $1 AND user_id = $2',
-      [id, userId]
-    );
-
-    if (snippetCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Snippet not found' });
-    }
-
-    // Remove existing tags
-    await pool.query('DELETE FROM snippet_tags WHERE snippet_id = $1', [id]);
-
-    // Add new tags
-    if (tags.length > 0) {
-      const tagValues = tags.map((tag, index) => `($1, $${index + 2})`).join(', ');
-      const tagParams = [id, ...tags];
-      
-      await pool.query(
-        `INSERT INTO snippet_tags (snippet_id, tag) VALUES ${tagValues}`,
-        tagParams
-      );
-    }
-
-    res.json({
-      success: true,
-      message: 'Tags updated successfully'
-    });
-  } catch (error) {
-    console.error('Update tags error:', error);
-    res.status(500).json({ error: 'Failed to update tags' });
+  catch(error){
+    console.error('Delete snippet error:', error);
+    res.status(500).json({ message: 'Failed to delete snippet.' });
   }
 });
 

@@ -1,211 +1,139 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-class ApiError extends Error {
-  constructor(message, status, data) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.data = data;
+// token and user Management 
+
+const saveToken = (token) => {
+  localStorage.setItem('token', token);
+};
+
+const saveUser = (user) => {
+  localStorage.setItem('user', JSON.stringify(user));
+};
+
+const getToken = () => {
+  // try and get token from localStorage first
+  const localToken = localStorage.getItem('token');
+  if(localToken){
+    return localToken;
   }
-}
-
-const getAuthToken = () => {
-  return localStorage.getItem('auth_token');
+  
+  // If no localStorage token, try to get from session (for Supabase auth)
+  // This will be set by the auth context
+  return null;
 };
 
-const setAuthToken = (token) => {
-  localStorage.setItem('auth_token', token);
+const logout = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
 };
 
-const removeAuthToken = () => {
-  localStorage.removeItem('auth_token');
-};
 
-const apiRequest = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
-  const token = getAuthToken();
+// API Request Function
 
-  const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
-    ...options,
-  };
-
+const apiRequest = async (method, path, data, sessionToken = null) => {
   try {
-    const response = await fetch(url, config);
-    const data = await response.json();
+    let token = sessionToken;
+    
+    // If no session token provided, try to get from localStorage
+    if (!token) {
+      token = getToken();
+    }
+    
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    // **FIX**: If a token exists, add it to the Authorization header
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const options = {
+      method,
+      headers,
+    };
+
+    if (data) {
+      options.body = JSON.stringify(data);
+    }
+
+    const response = await fetch(`${API_URL}${path}`, options);
+    
+    // Check if response has content before trying to parse JSON
+    let responseData;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      responseData = await response.json();
+    } else {
+      // For empty responses (like 204 No Content), set responseData to null
+      responseData = null;
+    }
 
     if (!response.ok) {
-      throw new ApiError(
-        data.error || 'Request failed',
-        response.status,
-        data
-      );
+      // Throw an error object that includes the message from the server
+      throw new Error(responseData?.message || `Request failed with status ${response.status}`);
     }
 
-    return data;
+    return responseData;
   } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw new ApiError('Network error', 0, { originalError: error });
+    console.error(`API request error: ${method} ${path}`, error);
+    // Re-throw the error so the calling function can handle it
+    throw error;
   }
 };
 
-// Auth API
+// --- API Endpoints ---
+
 export const authApi = {
-  async register(email, password) {
-    const data = await apiRequest('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    
-    if (data.success && data.data.token) {
-      setAuthToken(data.data.token);
+  register: async (email, password, fullName) => {
+    const data = { email, password, fullName };
+    const result = await apiRequest('POST', '/api/auth/register', data);
+    // **FIX**: Save token and user on successful registration
+    if (result.token) {
+      saveToken(result.token);
+      saveUser(result.user);
     }
-    
-    return data;
+    return result;
   },
-
-  async login(email, password) {
-    const data = await apiRequest('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    
-    if (data.success && data.data.token) {
-      setAuthToken(data.data.token);
+  login: async (email, password) => {
+    const data = { email, password };
+    const result = await apiRequest('POST', '/api/auth/login', data);
+    // **FIX**: Save token and user on successful login
+    if (result.token) {
+      saveToken(result.token);
+      saveUser(result.user);
     }
-    
-    return data;
+    return result;
   },
-
-  logout() {
-    removeAuthToken();
-  },
-
-  getToken() {
-    return getAuthToken();
-  },
-
-  isAuthenticated() {
-    return !!getAuthToken();
-  }
+  logout: logout, // Expose the logout function
+  getToken: getToken, // Expose the getToken function
 };
 
-// Snippets API
-export const snippetsApi = {
-  async getSnippets(params = {}) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        searchParams.append(key, value);
-      }
-    });
-    
-    const queryString = searchParams.toString();
-    const endpoint = `/snippets${queryString ? `?${queryString}` : ''}`;
-    
-    const data = await apiRequest(endpoint);
-    return data.data;
-  },
-
-  async getSnippet(id) {
-    const data = await apiRequest(`/snippets/${id}`);
-    return data.data;
-  },
-
-  async createSnippet(snippet) {
-    const data = await apiRequest('/snippets', {
-      method: 'POST',
-      body: JSON.stringify(snippet),
-    });
-    return data.data;
-  },
-
-  async updateSnippet(id, updates) {
-    const data = await apiRequest(`/snippets/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-    return data.data;
-  },
-
-  async deleteSnippet(id) {
-    await apiRequest(`/snippets/${id}`, {
-      method: 'DELETE',
-    });
-  },
-
-  async updateTags(snippetId, tags) {
-    await apiRequest(`/snippets/${snippetId}/tags`, {
-      method: 'POST',
-      body: JSON.stringify({ tags }),
-    });
-  }
+// functional api's for folders, projects, and snippets
+export const folderApi = {
+  getAll: () => apiRequest('GET', '/api/folders'),
+  getById: (id) => apiRequest('GET', `/api/folders/${id}`),
+  create: (data) => apiRequest('POST', '/api/folders', data),
+  update: (id, data) => apiRequest('PUT', `/api/folders/${id}`, data),
+  delete: (id) => apiRequest('DELETE', `/api/folders/${id}`),
 };
 
-// Folders API
-export const foldersApi = {
-  async getFolders() {
-    const data = await apiRequest('/folders');
-    return data.data;
-  },
-
-  async createFolder(folder) {
-    const data = await apiRequest('/folders', {
-      method: 'POST',
-      body: JSON.stringify(folder),
-    });
-    return data.data;
-  },
-
-  async updateFolder(id, updates) {
-    const data = await apiRequest(`/folders/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-    return data.data;
-  },
-
-  async deleteFolder(id) {
-    await apiRequest(`/folders/${id}`, {
-      method: 'DELETE',
-    });
-  }
+export const projectApi = {
+  getAll: (sessionToken) => apiRequest('GET', '/api/projects', null, sessionToken),
+  getById: (id, sessionToken) => apiRequest('GET', `/api/projects/${id}`, null, sessionToken),
+  create: (data, sessionToken) => apiRequest('POST', '/api/projects', data, sessionToken),
+  update: (id, data, sessionToken) => apiRequest('PUT', `/api/projects/${id}`, data, sessionToken),
+  delete: (id, sessionToken) => apiRequest('DELETE', `/api/projects/${id}`, null, sessionToken),
+  addMember: (projectId, email, role, sessionToken) => apiRequest('POST', `/api/projects/${projectId}/members`, { email, role }, sessionToken),
+  removeMember: (projectId, memberId, sessionToken) => apiRequest('DELETE', `/api/projects/${projectId}/members/${memberId}`, null, sessionToken),
 };
 
-// Projects API
-export const projectsApi = {
-  async getProjects() {
-    const data = await apiRequest('/projects');
-    return data.data;
-  },
-
-  async createProject(project) {
-    const data = await apiRequest('/projects', {
-      method: 'POST',
-      body: JSON.stringify(project),
-    });
-    return data.data;
-  },
-
-  async updateProject(id, updates) {
-    const data = await apiRequest(`/projects/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-    return data.data;
-  },
-
-  async deleteProject(id) {
-    await apiRequest(`/projects/${id}`, {
-      method: 'DELETE',
-    });
-  }
+export const snippetApi = {
+  getAll: () => apiRequest('GET', '/api/snippets'),
+  getById: (id) => apiRequest('GET', `/api/snippets/${id}`),
+  getByFolder: (folderId) => apiRequest('GET', `/api/snippets?folder_id=${folderId}`),
+  getByProject: (projectId) => apiRequest('GET', `/api/snippets?project_id=${projectId}`),
+  create: (data) => apiRequest('POST', '/api/snippets', data),
+  update: (id, data) => apiRequest('PUT', `/api/snippets/${id}`, data),
+  delete: (id) => apiRequest('DELETE', `/api/snippets/${id}`),
 };
-
-export { ApiError };
