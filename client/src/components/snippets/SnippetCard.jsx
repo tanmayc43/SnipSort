@@ -142,7 +142,6 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
     return null;
   })();
 
-  // Get language slug and color
   const langName = (fullSnippet || snippet).language_name || 'Plain Text';
   const langSlug = langName.toLowerCase().replace(/[^a-z0-9+#]+/g, '');
   const langColor = LANGUAGE_COLORS[langSlug] || '#999999';
@@ -154,7 +153,6 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
     </pre>
   );
 
-  // Utility to get contrasting text color (black or white) for a given background
   function getContrastText(bgColor) {
     const color = bgColor.charAt(0) === '#' ? bgColor.substring(1) : bgColor;
     const r = parseInt(color.substr(0,2),16);
