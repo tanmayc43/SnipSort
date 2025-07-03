@@ -1,95 +1,16 @@
-const errorHandler = (err, req, res, next) => {
-  console.error('Error:', {
-    message: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    timestamp: new Date().toISOString()
-  });
+const fs = require('fs');
+const path = require('path');
 
-  // Default error
-  let error = {
-    message: 'Internal server error',
-    status: 500
-  };
-
-  // Validation errors
-  if (err.name === 'ValidationError') {
-    error = {
-      message: 'Validation failed',
-      status: 400,
-      details: err.details
-    };
+function errorHandler(err, req, res, next) {
+  const logMsg = `[GLOBAL ERROR] ${new Date().toISOString()} ${req.method} ${req.originalUrl}\n${err.stack || err}\nRequest body: ${JSON.stringify(req.body)}\n\n`;
+  console.error(logMsg);
+  try {
+    fs.appendFileSync(path.join(__dirname, 'global_errors.log'), logMsg);
+  } catch (e) {
+    console.error('Failed to write global error log:', e);
   }
-
-  // JWT errors
-  if (err.name === 'JsonWebTokenError') {
-    error = {
-      message: 'Invalid token',
-      status: 401
-    };
-  }
-
-  if (err.name === 'TokenExpiredError') {
-    error = {
-      message: 'Token expired',
-      status: 401
-    };
-  }
-
-  // Database errors
-  if (err.code === '23505') { // Unique constraint violation
-    error = {
-      message: 'Resource already exists',
-      status: 409
-    };
-  }
-
-  if (err.code === '23503') { // Foreign key constraint violation
-    error = {
-      message: 'Referenced resource not found',
-      status: 400
-    };
-  }
-
-  if (err.code === '23502') { // Not null constraint violation
-    error = {
-      message: 'Required field missing',
-      status: 400
-    };
-  }
-
-  // Rate limiting errors
-  if (err.status === 429) {
-    error = {
-      message: 'Too many requests',
-      status: 429,
-      retryAfter: err.retryAfter
-    };
-  }
-
-  // Custom application errors
-  if (err.isOperational) {
-    error = {
-      message: err.message,
-      status: err.status || 500
-    };
-  }
-
-  // Don't leak error details in production
-  if (process.env.NODE_ENV === 'production') {
-    delete error.stack;
-    if (error.status === 500) {
-      error.message = 'Internal server error';
-    }
-  } else {
-    error.stack = err.stack;
-  }
-
-  res.status(error.status).json(error);
-};
+  res.status(500).json({ message: 'Server error', error: err.message });
+}
 
 // Custom error classes
 class AppError extends Error {

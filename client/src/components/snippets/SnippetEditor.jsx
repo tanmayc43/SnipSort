@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { snippetApi, folderApi, projectApi } from '@/lib/api';
 
-export default function SnippetEditor() {
+export default function SnippetEditor({ folderId: initialFolderId, folderName, projectId: initialProjectId, projectName }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -27,9 +27,11 @@ export default function SnippetEditor() {
   const [code, setCode] = useState('');
   const [languageId, setLanguageId] = useState('');
   const [tags, setTags] = useState('');
-  const [organizationType, setOrganizationType] = useState('none');
-  const [folderId, setFolderId] = useState('');
-  const [projectId, setProjectId] = useState('');
+  const [organizationType, setOrganizationType] = useState(
+    initialFolderId ? 'folder' : initialProjectId ? 'project' : 'none'
+  );
+  const [folderId, setFolderId] = useState(initialFolderId || '');
+  const [projectId, setProjectId] = useState(initialProjectId || '');
   const [folders, setFolders] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -50,7 +52,12 @@ export default function SnippetEditor() {
         setFolders(foldersData);
         setProjects(projectsData);
 
-        if (isEditing) {
+        // Debug logs for loaded data and initial context
+        console.log('[DEBUG] initialProjectId:', initialProjectId, 'initialFolderId:', initialFolderId);
+        console.log('[DEBUG] projects:', projectsData);
+        console.log('[DEBUG] folders:', foldersData);
+
+        if(isEditing){
           const snippet = await snippetApi.getById(id);
           setTitle(snippet.title);
           setDescription(snippet.description);
@@ -64,7 +71,23 @@ export default function SnippetEditor() {
             setOrganizationType('project');
             setProjectId(snippet.project_id);
           }
+        } 
+        else{
+          // when creating, preselect folder/project if provided and ensure value is present after data loads
+          if (initialFolderId) {
+            setOrganizationType('folder');
+            const found = foldersData.find(f => f.id === initialFolderId);
+            setFolderId(found ? found.id : '');
+          } else if (initialProjectId) {
+            setOrganizationType('project');
+            const found = projectsData.find(p => p.id === initialProjectId);
+            setProjectId(found ? found.id : '');
+          }
         }
+        // Debug logs for state after setting
+        setTimeout(() => {
+          console.log('[DEBUG] organizationType:', organizationType, 'projectId:', projectId, 'folderId:', folderId);
+        }, 500);
       } catch (error) {
         toast.error('Failed to load data', { description: error.message });
       } finally {
@@ -72,7 +95,7 @@ export default function SnippetEditor() {
       }
     };
     fetchData();
-  }, [id, isEditing]);
+  }, [id, isEditing, initialFolderId, initialProjectId]);
 
   const handleOrganizationChange = (type, value) => {
     if (type === 'folder') {
@@ -87,26 +110,40 @@ export default function SnippetEditor() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!languageId) {
-      toast.error('Validation Error', { description: 'Please select a language.' });
-      return;
+        toast.error('Validation Error', { description: 'Please select a language.' });
+        return;
     }
     setLoading(true);
 
+    console.log('[DEBUG] tags input value at submit:', tags);
+
+    const tagArray = tags.split(',').map(tag => tag.trim()).filter(Boolean);
+
     const snippetData = {
       title,
-      description,
       code,
       language_id: parseInt(languageId),
-      tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+      tags: tagArray,
     };
 
-    // Only include folder_id or project_id if they are actually selected
+    if (description && description.trim() !== '') {
+      snippetData.description = description;
+    }
+
     if (organizationType === 'folder' && folderId) {
       snippetData.folder_id = folderId;
-    }
-    if (organizationType === 'project' && projectId) {
+      snippetData.project_id = null;
+    } else if (organizationType === 'project' && projectId) {
       snippetData.project_id = projectId;
+      snippetData.folder_id = null;
+    } else {
+      snippetData.folder_id = null;
+      snippetData.project_id = null;
     }
+
+    // Debug log for payload
+    console.log('[DEBUG] handleSubmit organizationType:', organizationType, 'projectId:', projectId, 'folderId:', folderId);
+    console.log('[DEBUG] snippetData payload:', snippetData);
 
     try {
       if (isEditing) {
@@ -115,27 +152,18 @@ export default function SnippetEditor() {
       } else {
         await snippetApi.create(snippetData);
         toast.success('Snippet created successfully!');
-      }
-      
-      // Navigate back to the appropriate location
-      if (organizationType === 'folder' && folderId) {
-        // If snippet is assigned to a folder, go to that folder
-        navigate(`/dashboard/folders/${folderId}`);
-      } else if (organizationType === 'project' && projectId) {
-        // If snippet is assigned to a project, go to that project
-        navigate(`/dashboard/projects/${projectId}`);
-      } else if (referrer.includes('/dashboard/folders/')) {
-        // If we came from a folder, go back to that folder
-        const folderMatch = referrer.match(/\/dashboard\/folders\/([^\/]+)/);
-        if (folderMatch) {
-          navigate(`/dashboard/folders/${folderMatch[1]}`);
+        // Redirect to folder/project if context exists, else all snippets
+        if (organizationType === 'folder' && folderId) {
+          navigate(`/dashboard/folders/${folderId}`);
+        } else if (organizationType === 'project' && projectId) {
+          navigate(`/dashboard/projects/${projectId}`);
         } else {
-          navigate('/dashboard');
+          navigate('/dashboard/snippets');
         }
-      } else {
-        // Default navigation
-        navigate('/dashboard');
+        return;
       }
+      // For edit, fallback to all snippets
+      navigate('/dashboard/snippets');
     } catch (error) {
       toast.error('Failed to save snippet', { description: error.message });
     } finally {
@@ -172,32 +200,56 @@ export default function SnippetEditor() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="tags">Tags</Label>
-          <Input id="tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Enter tags separated by commas" />
+          <Input
+            id="tags"
+            value={tags}
+            onChange={e => setTags(e.target.value)}
+            placeholder="Enter tags separated by commas"
+          />
           <p className="text-xs text-muted-foreground">Separate multiple tags with commas (e.g., react, hooks, javascript)</p>
         </div>
         <div className="space-y-4">
           <Label>Organization</Label>
-          <Tabs value={organizationType} onValueChange={setOrganizationType}>
+          <Tabs 
+            value={organizationType} 
+            onValueChange={
+              initialFolderId || initialProjectId ? undefined : setOrganizationType
+            }
+          >
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="none">None</TabsTrigger>
-              <TabsTrigger value="folder">Folder</TabsTrigger>
-              <TabsTrigger value="project">Project</TabsTrigger>
+              <TabsTrigger value="none" disabled={!!(initialFolderId || initialProjectId)}>None</TabsTrigger>
+              <TabsTrigger value="folder" disabled={!!initialFolderId}>Folder</TabsTrigger>
+              <TabsTrigger value="project" disabled={!!initialProjectId}>Project</TabsTrigger>
             </TabsList>
             <TabsContent value="folder" className="mt-4">
-              <Select value={folderId} onValueChange={(value) => handleOrganizationChange('folder', value)}>
+              <Select 
+                value={folderId} 
+                onValueChange={initialFolderId ? undefined : (value) => handleOrganizationChange('folder', value)}
+                disabled={!!initialFolderId}
+              >
                 <SelectTrigger><SelectValue placeholder="Select a folder" /></SelectTrigger>
                 <SelectContent>
                   {folders.map((folder) => (<SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>))}
                 </SelectContent>
               </Select>
+              {initialFolderId && folderName && (
+                <div className="mt-2 text-sm text-muted-foreground">Selected Folder: <span className="font-semibold">{folderName}</span></div>
+              )}
             </TabsContent>
             <TabsContent value="project" className="mt-4">
-              <Select value={projectId} onValueChange={(value) => handleOrganizationChange('project', value)}>
+              <Select 
+                value={projectId} 
+                onValueChange={initialProjectId ? undefined : (value) => handleOrganizationChange('project', value)}
+                disabled={!!initialProjectId}
+              >
                 <SelectTrigger><SelectValue placeholder="Select a project" /></SelectTrigger>
                 <SelectContent>
                   {projects.map((project) => (<SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>))}
                 </SelectContent>
               </Select>
+              {initialProjectId && projectName && (
+                <div className="mt-2 text-sm text-muted-foreground">Selected Project: <span className="font-semibold">{projectName}</span></div>
+              )}
             </TabsContent>
           </Tabs>
         </div>

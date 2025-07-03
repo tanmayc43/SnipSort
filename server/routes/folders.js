@@ -1,7 +1,11 @@
 const express = require('express');
 const pool = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
-const { folderValidation, uuidValidation } = require('../middleware/validation');
+const { 
+  handleValidationErrors, 
+  uuidValidation, 
+  folderValidation 
+} = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -47,47 +51,60 @@ router.get('/:id', authenticateToken, uuidValidation, async (req, res) => {
 });
 
 // POST /api/folders - create a new folder
-router.post('/', authenticateToken, folderValidation, async (req, res) => {
-  try{
-    const { name, description, color } = req.body;
-    const userId = req.user.userId;
+router.post(
+  '/', 
+  authenticateToken, 
+  folderValidation,       // Use the validator
+  handleValidationErrors, // Handle any errors
+  async (req, res) => {
+    try{
+      const { name, description, color } = req.body;
+      const userId = req.user.userId;
 
-    const result = await pool.query(
-      'INSERT INTO folders (user_id, name, description, color) VALUES ($1, $2, $3, $4) RETURNING *',
-      [userId, name, description || '', color || '#3B82F6']
-    );
+      const result = await pool.query(
+        'INSERT INTO folders (user_id, name, description, color) VALUES ($1, $2, $3, $4) RETURNING *',
+        [userId, name, description || '', color || '#3B82F6']
+      );
 
-    res.status(201).json(result.rows[0]);
+      res.status(201).json(result.rows[0]);
+    }
+    catch(error){
+      console.error('Create folder error:', error.message);
+      res.status(500).json({ message: 'Server error while creating the folder.' });
+    }
   }
-  catch(error){
-    console.error('Create folder error:', error.message);
-    res.status(500).json({ message: 'Server error while creating the folder.' });
-  }
-});
+);
 
 // PUT /api/folders/:id - update an existing folder
-router.put('/:id', authenticateToken, uuidValidation, folderValidation, async (req, res) => {
-  try{
-    const { id } = req.params;
-    const { name, description, color } = req.body;
-    const userId = req.user.userId;
+router.put(
+  '/:id', 
+  authenticateToken, 
+  uuidValidation,         // Validate the ID in the URL
+  folderValidation,       // Validate the request body
+  handleValidationErrors, // Handle any errors
+  async (req, res) => {
+    try{
+      const { id } = req.params;
+      const { name, description, color } = req.body;
+      const userId = req.user.userId;
 
-    const result = await pool.query(
-      'UPDATE folders SET name = $1, description = $2, color = $3, updated_at = NOW() WHERE id = $4 AND user_id = $5 RETURNING *',
-      [name, description || '', color || '#3B82F6', id, userId]
-    );
+      const result = await pool.query(
+        'UPDATE folders SET name = $1, description = $2, color = $3, updated_at = NOW() WHERE id = $4 AND user_id = $5 RETURNING *',
+        [name, description || '', color || '#3B82F6', id, userId]
+      );
 
-    if(result.rows.length === 0){
-      return res.status(404).json({ message: 'Folder not found or you do not have permission to edit it.' });
+      if(result.rows.length === 0){
+        return res.status(404).json({ message: 'Folder not found or you do not have permission to edit it.' });
+      }
+
+      res.json(result.rows[0]);
+    } 
+    catch(error){
+      console.error('Update folder error:', error.message);
+      res.status(500).json({ message: 'Server error while updating the folder.' });
     }
-
-    res.json(result.rows[0]);
-  } 
-  catch(error){
-    console.error('Update folder error:', error.message);
-    res.status(500).json({ message: 'Server error while updating the folder.' });
   }
-});
+);
 
 // DELETE /api/folders/:id - delete a folder
 router.delete('/:id', authenticateToken, uuidValidation, async (req, res) => {

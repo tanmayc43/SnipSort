@@ -2,7 +2,7 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const validator = require('validator');
 
-// Rate limiting configurations
+// rate limiting config
 const createRateLimiter = (windowMs, max, message) => {
   return rateLimit({
     windowMs,
@@ -28,7 +28,7 @@ const authLimiter = createRateLimiter(
 
 const apiLimiter = createRateLimiter(
   15 * 60 * 1000, // 15 minutes
-  100, // 100 requests
+  1000, // 1000 requests, increased currently for easier dev experience 
   'Too many API requests, please try again later.'
 );
 
@@ -38,17 +38,25 @@ const strictLimiter = createRateLimiter(
   'Rate limit exceeded, please slow down.'
 );
 
-// Input sanitization middleware
+// input sanitization
 const sanitizeInput = (req, res, next) => {
-  const sanitizeValue = (value) => {
+  const sanitizeValue = (value, key) => {
     if (typeof value === 'string') {
-      // Remove potential XSS attempts
+      // not messing with code or description fields
+      if (key === 'code' || key === 'description') {
+        return value;
+      }
       return validator.escape(value.trim());
     }
+    if (Array.isArray(value)) {
+      // sanitize each item in the array other than code or description
+      return value.map((v) => sanitizeValue(v, key));
+    }
+    
     if (typeof value === 'object' && value !== null) {
       const sanitized = {};
-      for (const [key, val] of Object.entries(value)) {
-        sanitized[key] = sanitizeValue(val);
+      for (const [k, val] of Object.entries(value)) {
+        sanitized[k] = sanitizeValue(val, k);
       }
       return sanitized;
     }
@@ -56,7 +64,7 @@ const sanitizeInput = (req, res, next) => {
   };
 
   if (req.body) {
-    req.body = sanitizeValue(req.body);
+    req.body = sanitizeValue(req.body, null);
   }
   if (req.query) {
     req.query = sanitizeValue(req.query);
@@ -131,12 +139,17 @@ const detectSQLInjection = (req, res, next) => {
     /(\bOR\b|\bAND\b).*?[=<>]/i
   ];
 
-  const checkValue = (value) => {
+  const checkValue = (value, key) => {
     if (typeof value === 'string') {
       return sqlPatterns.some(pattern => pattern.test(value));
     }
     if (typeof value === 'object' && value !== null) {
-      return Object.values(value).some(checkValue);
+      return Object.entries(value).some(([k, v]) => {
+        // Skip SQLi check for 'code' and 'description' fields
+        // surely this wont lead to sql injection attacks
+        if (k === 'code' || k === 'description') return false;
+        return checkValue(v, k);
+      });
     }
     return false;
   };

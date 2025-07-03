@@ -272,9 +272,9 @@ export default function AllSnippets() {
               }
             </p>
             <Button asChild>
-              <Link to="/dashboard/snippet/new">
+              <Link to="/dashboard/snippet/new" state={{}}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Snippet
+                New Snippet
               </Link>
             </Button>
           </div>

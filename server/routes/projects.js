@@ -10,7 +10,7 @@ router.get('/', authenticateToken, async (req, res) => {
   try{
     const userId = req.user.userId;
     const result = await pool.query(`
-      SELECT p.*, pm.role
+      SELECT p.*, pm.role as role
       FROM projects p
       JOIN project_members pm ON p.id = pm.project_id
       WHERE pm.user_id = $1

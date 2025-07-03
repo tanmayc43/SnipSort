@@ -295,6 +295,17 @@ export default function Projects() {
     }
   }
 
+  const canRemoveMember = (currentUserRole, targetRole, currentUserId, targetUserId) => {
+    if (currentUserId === targetUserId) return false; // cannot remove self
+    if(currentUserRole === 'owner'){
+      return targetRole !== 'owner'; // owner can remove admins and members
+    }
+    if(currentUserRole === 'admin'){
+      return targetRole === 'member'; // admin can only remove members
+    }
+    return false; // members cannot remove anyone
+  }
+
   // Project Detail View
   if (projectId && currentProject) {
     console.log('Rendering project detail view for:', projectId, currentProject)
@@ -352,9 +363,9 @@ export default function Projects() {
             <p className="text-muted-foreground mb-1">{currentProject.description}</p>
           )}
           <div className="flex items-center gap-2">
-            {getRoleIcon(getUserRole(currentProject))}
+            {getRoleIcon(currentProject.role)}
             <span className="text-sm text-muted-foreground">
-              {getRoleLabel(getUserRole(currentProject))}
+              {getRoleLabel(currentProject.role)}
             </span>
           </div>
         </div>
@@ -379,7 +390,10 @@ export default function Projects() {
             </p>
             {canEditSnippets(currentProject) && (
               <Button asChild>
-                <Link to="/dashboard/snippet/new">
+                <Link 
+                  to="/dashboard/snippet/new" 
+                  state={{ projectId: currentProject.id, projectName: currentProject.name }}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Snippet
                 </Link>
@@ -448,7 +462,12 @@ export default function Projects() {
                       <span className="text-sm text-muted-foreground">
                         {getRoleLabel(member.role)}
                       </span>
-                      {canManageMembers(currentProject) && member.userId !== session.user.id && (
+                      {canRemoveMember(
+                        getUserRole(currentProject),
+                        member.role,
+                        session.user.id,
+                        member.userId
+                      ) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -574,7 +593,7 @@ export default function Projects() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
+                {/* <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
                     id="is_public"
@@ -583,7 +602,7 @@ export default function Projects() {
                     className="rounded"
                   />
                   <Label htmlFor="is_public">Make this project public</Label>
-                </div>
+                </div> */}
               </div>
               <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
@@ -793,9 +812,9 @@ export default function Projects() {
                       </p>
                     )}
                     <div className="flex items-center gap-2 mt-2">
-                      {getRoleIcon(getUserRole(project))}
+                      {getRoleIcon(project.role)}
                       <span className="text-xs text-muted-foreground">
-                        {getRoleLabel(getUserRole(project))}
+                        {getRoleLabel(project.role)}
                       </span>
                     </div>
                   </div>

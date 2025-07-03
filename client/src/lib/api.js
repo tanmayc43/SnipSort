@@ -119,13 +119,13 @@ export const folderApi = {
 };
 
 export const projectApi = {
-  getAll: (sessionToken) => apiRequest('GET', '/api/projects', null, sessionToken),
-  getById: (id, sessionToken) => apiRequest('GET', `/api/projects/${id}`, null, sessionToken),
-  create: (data, sessionToken) => apiRequest('POST', '/api/projects', data, sessionToken),
-  update: (id, data, sessionToken) => apiRequest('PUT', `/api/projects/${id}`, data, sessionToken),
-  delete: (id, sessionToken) => apiRequest('DELETE', `/api/projects/${id}`, null, sessionToken),
-  addMember: (projectId, email, role, sessionToken) => apiRequest('POST', `/api/projects/${projectId}/members`, { email, role }, sessionToken),
-  removeMember: (projectId, memberId, sessionToken) => apiRequest('DELETE', `/api/projects/${projectId}/members/${memberId}`, null, sessionToken),
+  getAll: () => apiRequest('GET', '/api/projects'),
+  getById: (id) => apiRequest('GET', `/api/projects/${id}`),
+  create: (data) => apiRequest('POST', '/api/projects', data),
+  update: (id, data) => apiRequest('PUT', `/api/projects/${id}`, data),
+  delete: (id) => apiRequest('DELETE', `/api/projects/${id}`),
+  addMember: (projectId, email, role) => apiRequest('POST', `/api/projects/${projectId}/members`, { email, role }),
+  removeMember: (projectId, memberId) => apiRequest('DELETE', `/api/projects/${projectId}/members/${memberId}`),
 };
 
 export const snippetApi = {
@@ -136,4 +136,5 @@ export const snippetApi = {
   create: (data) => apiRequest('POST', '/api/snippets', data),
   update: (id, data) => apiRequest('PUT', `/api/snippets/${id}`, data),
   delete: (id) => apiRequest('DELETE', `/api/snippets/${id}`),
+  removeFromFolder: (id) => apiRequest('PATCH', `/api/snippets/${id}/remove-from-folder`),
 };

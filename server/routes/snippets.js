@@ -1,20 +1,30 @@
 const express = require('express');
 const pool = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
-const { snippetValidation, uuidValidation } = require('../middleware/validation');
+const { 
+  uuidValidation, 
+  snippetValidation, 
+  handleValidationErrors // Import the shared error handler
+} = require('../middleware/validation');
 
 const router = express.Router();
 
 // manage tags within a transaction
 const manageTags = async (client, snippetId, tags) => {
+  console.log('[DEBUG] manageTags called with:', snippetId, tags);
   await client.query('DELETE FROM snippet_tags WHERE snippet_id = $1', [snippetId]);
 
   if(tags && tags.length > 0){
     // ensuring tags are unique and lowercase
     const uniqueTags = [...new Set(tags.map(t => String(t).toLowerCase().trim()))];
-    
+    console.log('[DEBUG] uniqueTags to insert:', uniqueTags);
     const tagQuery = 'INSERT INTO snippet_tags (snippet_id, tag) SELECT $1, unnest($2::text[])';
-    await client.query(tagQuery, [snippetId, uniqueTags]);
+    console.log('[DEBUG] tagQuery:', tagQuery);
+    const result = await client.query(tagQuery, [snippetId, uniqueTags]);
+    console.log('[DEBUG] Insert result:', result);
+    console.log('[DEBUG] Tags inserted for snippet:', snippetId);
+  } else {
+    console.log('[DEBUG] No tags to insert for snippet:', snippetId);
   }
 };
 
@@ -141,6 +151,7 @@ const coerceTags = (req, res, next) => {
 router.post('/', authenticateToken, coerceTags, snippetValidation, async (req, res) => {
   const client = await pool.connect();
   try{
+    console.log('[DEBUG] POST /api/snippets payload:', req.body);
     const { title, description, code, language_id, folder_id, project_id, is_favorite, is_public, tags } = req.body;
     const userId = req.user.userId;
 
@@ -180,7 +191,8 @@ router.post('/', authenticateToken, coerceTags, snippetValidation, async (req, r
   catch(error){
     await client.query('ROLLBACK');
     console.error('Create snippet error:', error);
-    res.status(500).json({ message: 'Failed to create snippet.' });
+    console.error('Request body:', req.body);
+    res.status(500).json({ message: 'Failed to create snippet.', error: error.message, body: req.body });
   } 
   finally{
     client.release();
@@ -188,15 +200,15 @@ router.post('/', authenticateToken, coerceTags, snippetValidation, async (req, r
 });
 
 // Middleware to coerce tags: {} to tags: [] before validation
-router.put('/:id', (req, res, next) => {
+router.put('/:id', authenticateToken, (req, res, next) => {
+  console.log('[DEBUG] PUT /api/snippets/:id - coerceTags middleware running');
   if (req.body && typeof req.body.tags === 'object' && !Array.isArray(req.body.tags)) {
     req.body.tags = [];
   }
   next();
-});
-
-// PUT /api/snippets/:id - update a snippet
-router.put('/:id', authenticateToken, uuidValidation, snippetValidation, async (req, res) => {
+}, snippetValidation, handleValidationErrors, async (req, res) => {
+  console.log('[DEBUG] PUT /api/snippets/:id - handler running');
+  // This code will now only run if ALL validation passes.
   console.log('[DEBUG] PUT /api/snippets/:id payload:', req.body);
   const client = await pool.connect();
   try{
@@ -230,21 +242,37 @@ router.put('/:id', authenticateToken, uuidValidation, snippetValidation, async (
       return res.status(403).json({ message: 'You do not have permission to edit this snippet.' });
     }
 
-    const snippetResult = await client.query(`
+    // 1. Update the main snippet data
+    await client.query(`
       UPDATE snippets 
       SET title = $1, description = $2, code = $3, language_id = $4, 
           folder_id = $5, project_id = $6, is_favorite = $7, is_public = $8, updated_at = NOW()
       WHERE id = $9
-      RETURNING *
     `, [title, description, code, language_id, folder_id, project_id, is_favorite, is_public, id]);
 
-    const updatedSnippet = snippetResult.rows[0];
-
-    // helper to update tags
-    await manageTags(client, updatedSnippet.id, tags);
+    // 2. Update the tags using your helper
+    await manageTags(client, id, tags);
+    
+    // 3. Commit the transaction
     await client.query('COMMIT');
     
-    res.json(updatedSnippet);
+    // **FIXED**: 4. Refetch the complete snippet with all relations to send back to the client
+    const finalResult = await client.query(`
+      SELECT 
+        s.*,
+        l.name as language_name,
+        l.slug as language_slug,
+        f.name as folder_name,
+        p.name as project_name,
+        COALESCE((SELECT json_agg(st.tag) FROM snippet_tags st WHERE st.snippet_id = s.id), '[]'::json) as tags
+      FROM snippets s
+      LEFT JOIN languages l ON s.language_id = l.id
+      LEFT JOIN folders f ON s.folder_id = f.id
+      LEFT JOIN projects p ON s.project_id = p.id
+      WHERE s.id = $1
+    `, [id]);
+
+    res.json(finalResult.rows[0]);
 
   }
   catch(error){
@@ -295,6 +323,36 @@ router.delete('/:id', authenticateToken, uuidValidation, async (req, res) => {
   catch(error){
     console.error('Delete snippet error:', error);
     res.status(500).json({ message: 'Failed to delete snippet.' });
+  }
+});
+
+// PATCH /api/snippets/:id/remove-from-folder - remove snippet from folder (set folder_id to NULL)
+router.patch('/:id/remove-from-folder', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Check permissions (reuse your existing logic)
+    const snippetCheck = await client.query(
+      `SELECT * FROM snippets WHERE id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+    if (snippetCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Snippet not found or no permission.' });
+    }
+    await client.query(
+      `UPDATE snippets SET folder_id = NULL, updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+    await client.query('COMMIT');
+    res.json({ message: 'Snippet removed from folder.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ message: 'Failed to remove snippet from folder.' });
+  } finally {
+    client.release();
   }
 });
 

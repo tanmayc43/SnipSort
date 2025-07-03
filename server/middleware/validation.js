@@ -1,16 +1,26 @@
-const { body, param, query, validationResult } = require('express-validator');
+const { body, param, validationResult, checkSchema } = require('express-validator');
 const { validatePasswordStrength, validateEmail } = require('./security');
+const fs = require('fs');
+const path = require('path');
 
-// Helper function to handle validation errors
+// single, reusable error handler for all validators
 const handleValidationErrors = (req, res, next) => {
+  console.log('[DEBUG] handleValidationErrors running');
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
+  if(!errors.isEmpty()){
     const formattedErrors = errors.array().map(error => ({
       field: error.path,
       message: error.msg,
       value: error.value
     }));
-    console.error('[VALIDATION ERROR]', formattedErrors); // Log detailed validation errors
+    const logMsg = `[VALIDATION ERROR] ${JSON.stringify(formattedErrors, null, 2)}\n`;
+    console.error(logMsg);
+    try{
+      fs.appendFileSync(path.join(__dirname, 'validation_errors.log'), logMsg);
+    }
+    catch(e){
+      console.error('Failed to write validation error log:', e);
+    }
     return res.status(400).json({ 
       message: 'Validation failed',
       errors: formattedErrors 
@@ -19,253 +29,74 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-// Custom validators
-const customValidators = {
-  isStrongPassword: (value) => {
-    const result = validatePasswordStrength(value);
-    if (!result.isValid) {
-      throw new Error(result.errors.join(', '));
-    }
-    return true;
-  },
-  
-  isValidEmail: (value) => {
-    if (!validateEmail(value)) {
-      throw new Error('Please provide a valid email address');
-    }
-    return true;
-  },
-  
-  isValidHexColor: (value) => {
-    if (value && !/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(value)) {
-      throw new Error('Please provide a valid hex color code');
-    }
-    return true;
-  },
-  
-  isValidRole: (value) => {
-    const validRoles = ['owner', 'admin', 'member'];
-    if (!validRoles.includes(value)) {
-      throw new Error('Role must be one of: owner, admin, member');
-    }
-    return true;
-  },
-  
-  isValidLanguageId: (value) => {
-    const id = parseInt(value);
-    if (isNaN(id) || id < 1 || id > 50) { // Assuming max 50 languages
-      throw new Error('Please provide a valid language ID');
-    }
-    return true;
-  }
-};
-
-// Validation schemas
+// Validator for UUIDs in URL parameters
 const uuidValidation = [
-  param('id')
-    .isUUID()
-    .withMessage('Invalid ID format'),
-  handleValidationErrors
+  param('id').isUUID(4).withMessage('Invalid ID format in URL.'),
 ];
 
-const paginationValidation = [
-  query('page')
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage('Page must be a positive integer'),
-  query('limit')
-    .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage('Limit must be between 1 and 100'),
-  query('sort')
-    .optional()
-    .isIn(['created_at', 'updated_at', 'title', 'name'])
-    .withMessage('Invalid sort field'),
-  query('order')
-    .optional()
-    .isIn(['asc', 'desc'])
-    .withMessage('Order must be asc or desc'),
-  handleValidationErrors
-];
-
-const authValidation = {
-  register: [
-    body('email')
-      .custom(customValidators.isValidEmail)
-      .normalizeEmail(),
-    body('password')
-      .custom(customValidators.isStrongPassword),
-    body('fullName')
-      .trim()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Full name must be between 2 and 100 characters')
-      .matches(/^[a-zA-Z\s'-]+$/)
-      .withMessage('Full name can only contain letters, spaces, hyphens, and apostrophes'),
-    handleValidationErrors
-  ],
+const snippetSchema = {
+  title: { isString: true, notEmpty: true, errorMessage: 'Title is required.' },
+  code: { isString: true, notEmpty: true, errorMessage: 'Code cannot be empty.' },
+  language_id: { isInt: { options: { min: 1 } }, errorMessage: 'A valid language must be selected.' },
+  description: { optional: true, isString: true },
+  folder_id: {
+    optional: { options: { nullable: true } },
+    custom: {
+      options: (value) => value === null || value === undefined || /^[0-9a-fA-F-]{36}$/.test(value),
+      errorMessage: 'Invalid folder ID format.'
+    }
+  },
+  project_id: {
+    optional: { options: { nullable: true } },
+    custom: {
+      options: (value) => value === null || value === undefined || /^[0-9a-fA-F-]{36}$/.test(value),
+      errorMessage: 'Invalid project ID format.'
+    }
+  },
   
-  login: [
-    body('email')
-      .custom(customValidators.isValidEmail)
-      .normalizeEmail(),
-    body('password')
-      .notEmpty()
-      .withMessage('Password is required'),
-    handleValidationErrors
-  ]
+  // fix for tags validation
+  tags: {
+    optional: true,
+    isArray: { errorMessage: 'Tags must be an array.' },
+  },
+  'tags.*': { 
+    isString: { errorMessage: 'Each tag must be a string.' },
+    notEmpty: { errorMessage: 'Tags cannot be empty strings.' },
+  },
+
+  is_favorite: { optional: true, isBoolean: true, errorMessage: 'is_favorite must be a boolean.' },
+  is_public: { optional: true, isBoolean: true, errorMessage: 'is_public must be a boolean.' }
 };
 
-const folderValidation = [
-  body('name')
-    .trim()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Folder name must be between 1 and 100 characters')
-    .matches(/^[a-zA-Z0-9\s\-_\.]+$/)
-    .withMessage('Folder name can only contain letters, numbers, spaces, hyphens, underscores, and dots'),
-  body('description')
-    .optional()
-    .trim()
-    .isLength({ max: 500 })
-    .withMessage('Description must not exceed 500 characters'),
-  body('color')
-    .optional()
-    .custom(customValidators.isValidHexColor),
-  handleValidationErrors
-];
+const folderSchema = {
+  name: { isString: true, notEmpty: true, errorMessage: 'Folder name is required.' },
+  description: { optional: true, isString: true },
+  color: { optional: true, isHexColor: true, errorMessage: 'Please provide a valid hex color code.' },
+};
 
-const projectValidation = [
-  body('name')
-    .trim()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Project name must be between 1 and 100 characters')
-    .matches(/^[a-zA-Z0-9\s\-_\.]+$/)
-    .withMessage('Project name can only contain letters, numbers, spaces, hyphens, underscores, and dots'),
-  body('description')
-    .optional()
-    .trim()
-    .isLength({ max: 500 })
-    .withMessage('Description must not exceed 500 characters'),
-  body('color')
-    .optional()
-    .custom(customValidators.isValidHexColor),
-  body('is_public')
-    .optional()
-    .isBoolean()
-    .withMessage('is_public must be a boolean'),
-  handleValidationErrors
-];
+const projectSchema = {
+  name: { isString: true, notEmpty: true, errorMessage: 'Project name is required.' },
+  description: { optional: true, isString: true },
+  is_public: { optional: true, isBoolean: true, errorMessage: 'is_public must be a boolean.' }
+};
 
-const snippetValidation = [
-  body('title')
-    .trim()
-    .isLength({ min: 1, max: 200 })
-    .withMessage('Snippet title must be between 1 and 200 characters'),
-  body('description')
-    .optional()
-    .trim()
-    .isLength({ max: 1000 })
-    .withMessage('Description must not exceed 1000 characters'),
-  body('code')
-    .notEmpty()
-    .withMessage('Code is required')
-    .isLength({ max: 100000 })
-    .withMessage('Code must not exceed 100,000 characters'),
-  body('language_id')
-    .custom(customValidators.isValidLanguageId),
-  body('folder_id')
-    .optional()
-    .custom((value) => {
-      if (value === null || value === undefined || value === '') {
-        return true; // Allow null/undefined/empty values
-      }
-      if (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
-        return true; // Valid UUID
-      }
-      throw new Error('Invalid folder ID format');
-    }),
-  body('project_id')
-    .optional()
-    .custom((value) => {
-      if (value === null || value === undefined || value === '') {
-        return true; // Allow null/undefined/empty values
-      }
-      if (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
-        return true; // Valid UUID
-      }
-      throw new Error('Invalid project ID format');
-    }),
-  body('is_favorite')
-    .optional()
-    .isBoolean()
-    .withMessage('is_favorite must be a boolean'),
-  body('is_public')
-    .optional()
-    .isBoolean()
-    .withMessage('is_public must be a boolean'),
-  body('tags')
-    .optional()
-    .isArray()
-    .withMessage('Tags must be an array')
-    .custom((tags) => {
-      if (tags.length > 20) {
-        throw new Error('Maximum 20 tags allowed');
-      }
-      for (const tag of tags) {
-        if (typeof tag !== 'string' || tag.length > 50) {
-          throw new Error('Each tag must be a string with maximum 50 characters');
-        }
-        if (!/^[a-zA-Z0-9\-_#+\.]+$/.test(tag)) {
-          throw new Error('Tags can only contain letters, numbers, hyphens, underscores, hash, plus, and dots');
-        }
-      }
-      return true;
-    }),
-  handleValidationErrors
-];
+const projectMemberSchema = {
+  email: { isEmail: true, normalizeEmail: true, errorMessage: 'A valid email address is required.' },
+  role: { isString: true, isIn: { options: [['viewer', 'editor', 'admin']], errorMessage: "Role must be one of 'viewer', 'editor', or 'admin'." } },
+};
 
-const projectMemberValidation = [
-  body('email')
-    .custom(customValidators.isValidEmail)
-    .normalizeEmail(),
-  body('role')
-    .custom(customValidators.isValidRole),
-  handleValidationErrors
-];
+// middleware to validate request body against schemas
+const snippetValidation = checkSchema(snippetSchema);
+const folderValidation = checkSchema(folderSchema);
+const projectValidation = checkSchema(projectSchema);
+const projectMemberValidation = checkSchema(projectMemberSchema);
 
-const searchValidation = [
-  query('q')
-    .optional()
-    .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Search query must be between 2 and 100 characters'),
-  query('language')
-    .optional()
-    .isAlpha()
-    .withMessage('Language filter must contain only letters'),
-  query('folder_id')
-    .optional()
-    .isUUID()
-    .withMessage('Invalid folder ID format'),
-  query('project_id')
-    .optional()
-    .isUUID()
-    .withMessage('Invalid project ID format'),
-  query('favorite')
-    .optional()
-    .isBoolean()
-    .withMessage('Favorite filter must be a boolean'),
-  handleValidationErrors
-];
-
+// export all validators with error handler
 module.exports = {
   handleValidationErrors,
   uuidValidation,
-  paginationValidation,
-  authValidation,
+  snippetValidation,
   folderValidation,
   projectValidation,
-  snippetValidation,
   projectMemberValidation,
-  searchValidation,
-  customValidators
 };

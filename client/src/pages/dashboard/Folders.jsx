@@ -188,6 +188,12 @@ export default function Folders() {
     setDialogOpen(true)
   }
 
+  // Permission: Only owner can edit snippets in a folder (customize if you have roles)
+  const canEditSnippets = (folder) => {
+    if (!session || !session.user || !folder) return false;
+    return folder.owner_id === session.user.id;
+  }
+
   // Folder Detail View
   if (folderId && currentFolder) {
     return (
@@ -250,12 +256,17 @@ export default function Folders() {
             <p className="text-muted-foreground mb-4">
               Create your first snippet in this folder
             </p>
-            <Button asChild>
-              <Link to="/dashboard/snippet/new">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Snippet
-              </Link>
-            </Button>
+            {canEditSnippets(currentFolder) && (
+              <Button asChild>
+                <Link 
+                  to="/dashboard/snippet/new" 
+                  state={{ folderId: currentFolder.id, folderName: currentFolder.name }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Snippet
+                </Link>
+              </Button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" style={{ gridAutoRows: '260px' }}>
@@ -278,6 +289,10 @@ export default function Folders() {
                   } catch (error) {
                     throw error
                   }
+                }}
+                onRemovedFromFolder={() => {
+                  toast.success('Snippet removed from folder.');
+                  loadFolderDetails();
                 }}
               />
             ))}

@@ -10,6 +10,7 @@ import {
   Folder,
   Box, // Using Box for projects
   MoreVertical,
+  Loader2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -31,12 +32,13 @@ import {
 import { snippetApi } from '@/lib/api';
 import { LANGUAGE_COLORS } from '@/lib/constants';
 
-export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFavoriteToggled, readOnly = false }) {
+export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFavoriteToggled, readOnly = false, onRemovedFromFolder }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [fullSnippet, setFullSnippet] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [removingFromFolder, setRemovingFromFolder] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -143,6 +145,22 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
     }
   };
 
+  const handleRemoveFromFolder = async (e) => {
+    e.stopPropagation();
+    if (!snippet.folder_id) return;
+    setRemovingFromFolder(true);
+    try {
+      await snippetApi.removeFromFolder(snippet.id);
+      toast.success('Snippet removed from folder.');
+      if (onRemovedFromFolder) onRemovedFromFolder(snippet.id);
+      // Optionally, you can refresh the page or trigger a parent update here
+    } catch (error) {
+      toast.error('Failed to remove from folder.', { description: error.message });
+    } finally {
+      setRemovingFromFolder(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -227,6 +245,19 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
                 <DropdownMenuContent align="end">
                   {!readOnly && (
                     <>
+                      {snippet.folder_id && (
+                        <DropdownMenuItem
+                          onClick={handleRemoveFromFolder}
+                          disabled={removingFromFolder}
+                        >
+                          {removingFromFolder ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Folder className="mr-2 h-4 w-4" />
+                          )}
+                          Remove from Folder
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         onClick={handleDelete}
                         disabled={isDeleting}

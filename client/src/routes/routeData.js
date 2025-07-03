@@ -8,6 +8,7 @@ import EditSnippet from '../pages/dashboard/EditSnippet';
 import SnippetView from '../pages/dashboard/SnippetView';
 import Folders from '../pages/dashboard/Folders';
 import Projects from '../pages/dashboard/Projects';
+import Settings from '../pages/dashboard/Settings';
 
 export const routes = [
   { path: '/', name: 'Home', element: Home },
@@ -27,6 +28,7 @@ export const routes = [
       { path: 'folders/:id', element: Folders },
       { path: 'projects', element: Projects },
       { path: 'projects/:id', element: Projects },
+      { path: 'settings', element: Settings },
     ]
   },
 ];
