@@ -15,6 +15,7 @@ import SnippetEditor from './components/snippets/SnippetEditor'
 import SnippetView from './pages/dashboard/SnippetView'
 import Folders from './pages/dashboard/Folders'
 import Projects from './pages/dashboard/Projects'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   return (
@@ -27,7 +28,11 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<SignUp />} />
-                <Route path="/dashboard" element={<DashboardLayout />}>
+                <Route path="/dashboard" element={
+                  <ProtectedRoute>
+                    <DashboardLayout />
+                  </ProtectedRoute>
+                }>
                   <Route index element={<AllSnippets />} />
                   <Route path="snippets" element={<AllSnippets />} />
                   <Route path="snippet/new" element={<SnippetEditor />} />

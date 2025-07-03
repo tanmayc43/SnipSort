@@ -211,29 +211,30 @@ export default function Projects() {
   }
 
   const isOwner = (project) => {
-    return project.owner_id === session.user.id
+    if (!session || !session.user) return false;
+    return project.owner_id === session.user.id;
   }
 
   const getUserRole = (project) => {
-    // Check if project has members array (from backend) or project_members (from list view)
-    const members = project.members || project.project_members || []
-    const member = members.find(m => m.userId === session.user.id || m.user_id === session.user.id)
-    return member?.role || 'member'
+    if (!session || !session.user) return null;
+    const members = project.members || project.project_members || [];
+    const member = members.find(m => m.userId === session.user.id || m.user_id === session.user.id);
+    return member?.role || 'member';
   }
 
   const canManageProject = (project) => {
-    const role = getUserRole(project)
-    return role === 'owner' || role === 'admin'
+    const role = getUserRole(project);
+    return role === 'owner' || role === 'admin';
   }
 
   const canManageMembers = (project) => {
-    const role = getUserRole(project)
-    return role === 'owner' || role === 'admin'
+    const role = getUserRole(project);
+    return role === 'owner' || role === 'admin';
   }
 
   const canEditSnippets = (project) => {
-    const role = getUserRole(project)
-    return role === 'owner' || role === 'admin'
+    const role = getUserRole(project);
+    return role === 'owner' || role === 'admin';
   }
 
   const handleAddMember = async (e) => {
