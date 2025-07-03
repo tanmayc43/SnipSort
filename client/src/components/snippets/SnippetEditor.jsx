@@ -97,10 +97,16 @@ export default function SnippetEditor() {
       description,
       code,
       language_id: parseInt(languageId),
-      folder_id: organizationType === 'folder' ? folderId : null,
-      project_id: organizationType === 'project' ? projectId : null,
       tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
     };
+
+    // Only include folder_id or project_id if they are actually selected
+    if (organizationType === 'folder' && folderId) {
+      snippetData.folder_id = folderId;
+    }
+    if (organizationType === 'project' && projectId) {
+      snippetData.project_id = projectId;
+    }
 
     try {
       if (isEditing) {

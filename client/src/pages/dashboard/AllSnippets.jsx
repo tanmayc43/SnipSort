@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,15 +11,7 @@ import SnippetCard from '@/components/snippets/SnippetCard';
 import { snippetApi } from '@/lib/api';
 import { UserAuth } from '@/context/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
-
-// can do filtering with a static list of languages, similar to the editor or can make an api for the same
-// need to figure out 
-const LANGUAGES = [
-    { value: 'JavaScript', label: 'JavaScript' },
-    { value: 'Python', label: 'Python' },
-    { value: 'SQL', label: 'SQL' },
-    // more languages can be added here
-];
+import { languages } from '@/lib/constants';
 
 export default function AllSnippets() {
   const { session, loading: authLoading } = UserAuth();
@@ -34,12 +26,23 @@ export default function AllSnippets() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(9); // default desktop
 
-  // Responsive page size
-  useEffect(() => {
+  const gridRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Dynamic page size based on grid width and height
+  useLayoutEffect(() => {
     function updatePageSize() {
-      if (window.innerWidth < 640) setPageSize(4); // mobile
-      else if (window.innerWidth < 1024) setPageSize(6); // tablet
-      else setPageSize(9); // desktop
+      if (!gridRef.current || !containerRef.current) return;
+      const width = gridRef.current.offsetWidth;
+      const height = gridRef.current.offsetHeight;
+      const columns = Math.max(1, Math.floor(width / 320));
+      // Card height + gap (gap-2 = 8px)
+      const cardHeight = 260;
+      const gap = 8;
+      // Subtract filter/header height (estimate 120px) and pagination height (estimate 40px)
+      const availableHeight = containerRef.current.offsetHeight - 120;
+      const rows = Math.max(1, Math.floor(availableHeight / (cardHeight + gap)));
+      setPageSize(columns * rows);
     }
     updatePageSize();
     window.addEventListener('resize', updatePageSize);
@@ -77,7 +80,6 @@ export default function AllSnippets() {
 
   useEffect(() => {
     let filtered = [...snippets];
-    // need to improve this
     if(searchQuery.trim()){
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(s =>
@@ -86,15 +88,15 @@ export default function AllSnippets() {
         (s.tags && s.tags.some(tag => tag.toLowerCase().includes(query)))
       );
     }
-
     if(languageFilter !== 'all'){
-      filtered = filtered.filter(s => s.language_name === languageFilter);
+      const selectedLang = languages.find(l => l.name === languageFilter);
+      if (selectedLang) {
+        filtered = filtered.filter(s => (s.language_slug === selectedLang.slug || s.language_name === selectedLang.name));
+      }
     }
-
     if (showFavoritesOnly) {
       filtered = filtered.filter(s => s.is_favorite);
     }
-
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'title': return a.title.localeCompare(b.title);
@@ -103,7 +105,6 @@ export default function AllSnippets() {
         case 'updated_at': default: return new Date(b.updated_at) - new Date(a.updated_at);
       }
     });
-
     setFilteredSnippets(filtered);
   }, [snippets, searchQuery, languageFilter, sortBy, showFavoritesOnly]);
 
@@ -126,10 +127,38 @@ export default function AllSnippets() {
 
   const handleToggleFavorite = async (snippetId, isCurrentlyFavorite) => {
     const newFavoriteStatus = !isCurrentlyFavorite;
-    console.log('[DEBUG] handleToggleFavorite called with snippetId:', snippetId, 'isCurrentlyFavorite:', isCurrentlyFavorite, 'newFavoriteStatus:', newFavoriteStatus);
     setSnippets(prev => prev.map(s => (s.id === snippetId ? { ...s, is_favorite: newFavoriteStatus } : s)));
     try{
-      await snippetApi.update(snippetId, { is_favorite: !isCurrentlyFavorite });
+      // fetch the full snippet to get all required fields
+      const full = await snippetApi.getById(snippetId);
+      // Defensive tags handling
+      let tags = [];
+      if (Array.isArray(full.tags)) {
+        tags = full.tags;
+      } else if (typeof full.tags === 'string') {
+        try {
+          tags = JSON.parse(full.tags);
+          if (!Array.isArray(tags)) tags = [];
+        } catch {
+          tags = [];
+        }
+      } else {
+        tags = [];
+      }
+      console.log('full.tags:', full.tags, 'tags:', tags); // Debug log
+      const payload = {
+        title: full.title,
+        code: full.code,
+        language_id: full.language_id,
+        description: full.description || '',
+        is_favorite: newFavoriteStatus,
+        is_public: typeof full.is_public === 'boolean' ? full.is_public : false,
+        tags,
+      };
+      if (full.folder_id) payload.folder_id = full.folder_id;
+      if (full.project_id) payload.project_id = full.project_id;
+      console.log('Outgoing payload:', payload); // Debug log
+      await snippetApi.update(snippetId, payload);
       console.log('[DEBUG] API call successful, state updated');
     }
     catch(error){
@@ -156,8 +185,8 @@ export default function AllSnippets() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+    <div ref={containerRef} className="flex flex-col h-full min-h-0">
+      <div className="flex flex-col sm:flex-row gap-4 pb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search snippets..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
@@ -175,7 +204,9 @@ export default function AllSnippets() {
           <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Filter by language" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Languages</SelectItem>
-            {LANGUAGES.map((lang) => (<SelectItem key={lang.value} value={lang.value}>{lang.label}</SelectItem>))}
+            {languages.map((lang) => (
+              <SelectItem key={lang.slug} value={lang.name}>{lang.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={setSortBy}>
@@ -188,8 +219,7 @@ export default function AllSnippets() {
           </SelectContent>
         </Select>
       </div>
-
-      <div className="flex-1 flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0 h-full">
         {filteredSnippets.length === 0 ? (
           <div className="text-center py-12 flex-1 flex flex-col justify-center">
             <h3 className="text-lg font-semibold mb-2">No Snippets Found</h3>
@@ -197,54 +227,64 @@ export default function AllSnippets() {
             <Button asChild><Link to="/dashboard/snippet/new"><Plus className="h-4 w-4 mr-2" />Create Snippet</Link></Button>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 flex-1">
-              {paginatedSnippets.map((snippet) => (
-                <SnippetCard
-                  key={snippet.id}
-                  snippet={snippet}
-                  onDelete={handleDelete}
-                  onToggleFavorite={() => handleToggleFavorite(snippet.id, snippet.is_favorite)}
-                  onFavoriteToggled={onFavoriteToggled}
-                />
-              ))}
-            </div>
+          <div
+            ref={gridRef}
+            className="grid gap-2 flex-1 min-h-0 h-full"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gridAutoRows: '260px',
+              alignContent: 'start',
+            }}
+          >
+            {paginatedSnippets.map((snippet) => (
+              <SnippetCard
+                key={snippet.id}
+                snippet={snippet}
+                onDelete={handleDelete}
+                onToggleFavorite={() => handleToggleFavorite(snippet.id, snippet.is_favorite)}
+                onFavoriteToggled={onFavoriteToggled}
+              />
+            ))}
+            {Array.from({ length: pageSize - paginatedSnippets.length }).map((_, i) => (
+              <div key={i} className="invisible" />
+            ))}
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={e => { e.preventDefault(); setPage(p => Math.max(1, p - 1)); }}
+                    aria-disabled={page === 1}
+                  />
+                </PaginationItem>
+                {[...Array(totalPages)].map((_, i) => (
+                  <PaginationItem key={i}>
+                    <PaginationLink
+                      href="#"
+                      isActive={page === i + 1}
+                      onClick={e => { e.preventDefault(); setPage(i + 1); }}
+                    >
+                      {i + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={e => { e.preventDefault(); setPage(p => Math.min(totalPages, p + 1)); }}
+                    aria-disabled={page === totalPages}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
       </div>
-      {totalPages > 1 && (
-        <div className="flex justify-center pt-2">
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={e => { e.preventDefault(); setPage(p => Math.max(1, p - 1)); }}
-                  aria-disabled={page === 1}
-                />
-              </PaginationItem>
-              {[...Array(totalPages)].map((_, i) => (
-                <PaginationItem key={i}>
-                  <PaginationLink
-                    href="#"
-                    isActive={page === i + 1}
-                    onClick={e => { e.preventDefault(); setPage(i + 1); }}
-                  >
-                    {i + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={e => { e.preventDefault(); setPage(p => Math.min(totalPages, p + 1)); }}
-                  aria-disabled={page === totalPages}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
-      )}
     </div>
   );
 }

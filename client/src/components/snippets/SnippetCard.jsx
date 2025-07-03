@@ -100,22 +100,42 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
     try{
       // fetching full snippet to ensure all required fields are present
       const full = snippet.code ? snippet : await snippetApi.getById(snippet.id);
-      const updatedSnippet = {
-        ...full,
+      // Defensive tags handling
+      let tags = [];
+      if (Array.isArray(full.tags)) {
+        tags = full.tags;
+      } else if (typeof full.tags === 'string') {
+        try {
+          tags = JSON.parse(full.tags);
+          if (!Array.isArray(tags)) tags = [];
+        } catch {
+          tags = [];
+        }
+      } else {
+        tags = [];
+      }
+      console.log('full.tags:', full.tags, 'tags:', tags); // Debug log
+      // payload with all required fields for validation
+      const payload = {
+        title: full.title,
+        code: full.code,
+        language_id: full.language_id,
+        description: full.description || '',
         is_favorite: !full.is_favorite,
+        is_public: typeof full.is_public === 'boolean' ? full.is_public : false,
+        tags,
       };
-      // remove fields that shouldn't be sent (like id, created_at, updated_at, etc.)
-      const { id, created_at, updated_at, ...payload } = updatedSnippet;
+      if (full.folder_id) payload.folder_id = full.folder_id;
+      if (full.project_id) payload.project_id = full.project_id;
+      console.log('Outgoing payload:', payload); // Debug log
       console.log('[DEBUG] Toggling favorite for snippet:', snippet.id);
-      console.log('[DEBUG] Current is_favorite:', full.is_favorite, 'New is_favorite:', updatedSnippet.is_favorite);
-      console.log('[DEBUG] Payload sent to API:', payload);
       const response = await snippetApi.update(snippet.id, payload);
       console.log('[DEBUG] API response:', response);
       // Update parent state if callback is provided
       if (onFavoriteToggled) {
-        onFavoriteToggled(snippet.id, updatedSnippet.is_favorite);
+        onFavoriteToggled(snippet.id, payload.is_favorite);
       }
-      toast.success(updatedSnippet.is_favorite ? 'Added to favorites' : 'Removed from favorites');
+      toast.success(payload.is_favorite ? 'Added to favorites' : 'Removed from favorites');
     } 
     catch (error) {
       console.error('[DEBUG] Error updating favorite status:', error);
@@ -166,7 +186,7 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
     <Dialog open={modalOpen} onOpenChange={setModalOpen}>
       <DialogTrigger asChild>
         <div
-          className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col cursor-pointer group w-full mb-2 min-h-[110px] lg:min-h-[80px] justify-between"
+          className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col cursor-pointer group w-full h-[260px] justify-between"
           style={{ minHeight: 0 }}
           onClick={() => setModalOpen(true)}
         >

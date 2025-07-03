@@ -154,31 +154,28 @@ export default function DashboardLayout() {
             <Button
               variant="ghost"
               size="icon"
-              className="block"
               onClick={() => setSidebarOpen((open) => !open)}
               aria-label="Toggle sidebar"
             >
               {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
-            <form onSubmit={handleSearch} className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search snippets..."
-                className="pl-10 w-64"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </form>
           </div>
           <div className="flex items-center space-x-4">
             <ToggleButton />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
-                    {session?.user?.email?.[0]?.toUpperCase() || 'U'}
-                  </div>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0 overflow-hidden">
+                  {session?.user?.avatarUrl ? (
+                    <img
+                      src={session.user.avatarUrl}
+                      alt="User avatar"
+                      className="h-8 w-8 rounded-full object-cover border border-muted"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
+                      {session?.user?.email?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end">

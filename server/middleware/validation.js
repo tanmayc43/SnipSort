@@ -10,7 +10,7 @@ const handleValidationErrors = (req, res, next) => {
       message: error.msg,
       value: error.value
     }));
-    
+    console.error('[VALIDATION ERROR]', formattedErrors); // Log detailed validation errors
     return res.status(400).json({ 
       message: 'Validation failed',
       errors: formattedErrors 
@@ -174,12 +174,26 @@ const snippetValidation = [
     .custom(customValidators.isValidLanguageId),
   body('folder_id')
     .optional()
-    .isUUID()
-    .withMessage('Invalid folder ID format'),
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null/undefined/empty values
+      }
+      if (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+        return true; // Valid UUID
+      }
+      throw new Error('Invalid folder ID format');
+    }),
   body('project_id')
     .optional()
-    .isUUID()
-    .withMessage('Invalid project ID format'),
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null/undefined/empty values
+      }
+      if (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+        return true; // Valid UUID
+      }
+      throw new Error('Invalid project ID format');
+    }),
   body('is_favorite')
     .optional()
     .isBoolean()

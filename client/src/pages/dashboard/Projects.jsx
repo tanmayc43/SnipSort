@@ -299,39 +299,23 @@ export default function Projects() {
     console.log('Rendering project detail view for:', projectId, currentProject)
     return (
       <div className="p-6">
-        <div className="flex items-center gap-4 mb-6">
+        {/* Back button row */}
+        <div className="mb-2">
           <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/projects')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Projects
           </Button>
-          <div
-            className="w-4 h-4 rounded-full"
-            style={{ backgroundColor: currentProject.color }}
-          />
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">{currentProject.name}</h1>
-            {currentProject.description && (
-              <p className="text-muted-foreground">{currentProject.description}</p>
-            )}
-            <div className="flex items-center gap-2 mt-2">
-              {getRoleIcon(getUserRole(currentProject))}
-              <span className="text-sm text-muted-foreground">
-                {getRoleLabel(getUserRole(currentProject))}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {canManageMembers(currentProject) && (
-              <Button variant="outline" onClick={() => setMembersDialogOpen(true)}>
-                <Users className="h-4 w-4 mr-2" />
-                Members
-              </Button>
-            )}
+        </div>
+        {/* Project header row */}
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <div className="flex flex-nowrap items-center gap-2 min-w-0">
+            <div className="w-5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: currentProject.color }} />
+            <h1 className="text-2xl font-bold truncate max-w-[120px] sm:max-w-xs">{currentProject.name}</h1>
             {canManageProject(currentProject) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <MoreVertical className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" className="ml-1 flex-shrink-0">
+                    <MoreVertical className="h-5 w-5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -351,12 +335,33 @@ export default function Projects() {
               </DropdownMenu>
             )}
           </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-2 flex-shrink-0 mt-2 sm:mt-0">
+            {canManageMembers(currentProject) && (
+              <Button variant="outline" onClick={() => setMembersDialogOpen(true)}>
+                <Users className="h-4 w-4 mr-2" />
+                Members
+              </Button>
+            )}
+          </div>
+        </div>
+        {/* Project description and role */}
+        <div className="mb-6">
+          {currentProject.description && (
+            <p className="text-muted-foreground mb-1">{currentProject.description}</p>
+          )}
+          <div className="flex items-center gap-2">
+            {getRoleIcon(getUserRole(currentProject))}
+            <span className="text-sm text-muted-foreground">
+              {getRoleLabel(getUserRole(currentProject))}
+            </span>
+          </div>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" style={{ gridAutoRows: '260px' }}>
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-32 bg-muted rounded-lg animate-pulse"></div>
+              <div key={i} className="bg-muted rounded-lg animate-pulse"></div>
             ))}
           </div>
         ) : projectSnippets.length === 0 ? (
@@ -381,7 +386,7 @@ export default function Projects() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" style={{ gridAutoRows: '260px' }}>
             {projectSnippets.map((snippet) => (
               <SnippetCard
                 key={snippet.id}
@@ -601,9 +606,9 @@ export default function Projects() {
       <div className="p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-muted rounded w-1/4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" style={{ gridAutoRows: '260px' }}>
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-32 bg-muted rounded-lg"></div>
+              <div key={i} className="bg-muted rounded-lg"></div>
             ))}
           </div>
         </div>
@@ -644,9 +649,9 @@ export default function Projects() {
       <div className="p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-muted rounded w-1/4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" style={{ gridAutoRows: '260px' }}>
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-32 bg-muted rounded-lg"></div>
+              <div key={i} className="bg-muted rounded-lg"></div>
             ))}
           </div>
         </div>
@@ -760,7 +765,7 @@ export default function Projects() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {projects.map((project) => (
             <div
               key={project.id}

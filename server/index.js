@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const bodyParser = require('body-parser');
 
 const pool = require('./config/database');
 const { errorHandler } = require('./middleware/errorHandler');
@@ -35,8 +36,8 @@ app.use(cors({
 }));
 
 // Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // Security middleware
 app.use(sanitizeInput);

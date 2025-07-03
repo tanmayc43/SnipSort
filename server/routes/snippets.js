@@ -32,7 +32,7 @@ router.get('/', authenticateToken, async (req, res) => {
         l.slug as language_slug,
         f.name as folder_name,
         p.name as project_name,
-        (SELECT json_agg(st.tag) FROM snippet_tags st WHERE st.snippet_id = s.id) as tags
+        COALESCE((SELECT json_agg(st.tag) FROM snippet_tags st WHERE st.snippet_id = s.id), '[]'::json) as tags
       FROM snippets s
       LEFT JOIN languages l ON s.language_id = l.id
       LEFT JOIN folders f ON s.folder_id = f.id
@@ -103,7 +103,7 @@ router.get('/:id', authenticateToken, uuidValidation, async (req, res) => {
         l.slug as language_slug,
         f.name as folder_name,
         p.name as project_name,
-        (SELECT json_agg(st.tag) FROM snippet_tags st WHERE st.snippet_id = s.id) as tags
+        COALESCE((SELECT json_agg(st.tag) FROM snippet_tags st WHERE st.snippet_id = s.id), '[]'::json) as tags
       FROM snippets s
       LEFT JOIN languages l ON s.language_id = l.id
       LEFT JOIN folders f ON s.folder_id = f.id
@@ -129,8 +129,16 @@ router.get('/:id', authenticateToken, uuidValidation, async (req, res) => {
   }
 });
 
+// Middleware to coerce tags: {} to tags: [] before validation
+const coerceTags = (req, res, next) => {
+  if (req.body && typeof req.body.tags === 'object' && !Array.isArray(req.body.tags)) {
+    req.body.tags = [];
+  }
+  next();
+};
+
 // POST /api/snippets - create a new snippet
-router.post('/', authenticateToken, snippetValidation, async (req, res) => {
+router.post('/', authenticateToken, coerceTags, snippetValidation, async (req, res) => {
   const client = await pool.connect();
   try{
     const { title, description, code, language_id, folder_id, project_id, is_favorite, is_public, tags } = req.body;
@@ -179,8 +187,17 @@ router.post('/', authenticateToken, snippetValidation, async (req, res) => {
   }
 });
 
+// Middleware to coerce tags: {} to tags: [] before validation
+router.put('/:id', (req, res, next) => {
+  if (req.body && typeof req.body.tags === 'object' && !Array.isArray(req.body.tags)) {
+    req.body.tags = [];
+  }
+  next();
+});
+
 // PUT /api/snippets/:id - update a snippet
 router.put('/:id', authenticateToken, uuidValidation, snippetValidation, async (req, res) => {
+  console.log('[DEBUG] PUT /api/snippets/:id payload:', req.body);
   const client = await pool.connect();
   try{
     const { id } = req.params;

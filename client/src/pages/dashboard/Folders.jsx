@@ -192,48 +192,53 @@ export default function Folders() {
   if (folderId && currentFolder) {
     return (
       <div className="p-6">
-        <div className="flex items-center gap-4 mb-6">
+        {/* Back button row */}
+        <div className="mb-2">
           <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/folders')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Folders
           </Button>
-          <div
-            className="w-4 h-4 rounded-full"
-            style={{ backgroundColor: currentFolder.color }}
-          />
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">{currentFolder.name}</h1>
-            {currentFolder.description && (
-              <p className="text-muted-foreground">{currentFolder.description}</p>
-            )}
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleEdit(currentFolder)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Folder
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => handleDelete(currentFolder.id)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Folder
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
+        {/* Folder header row */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 mb-6">
+          <div className="flex items-center gap-3 mb-2 sm:mb-0">
+            <div className="w-5 h-5 rounded-full" style={{ backgroundColor: currentFolder.color }} />
+            <h1 className="text-2xl font-bold truncate">{currentFolder.name}</h1>
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-2 mt-2 sm:mt-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleEdit(currentFolder)}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit Folder
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => handleDelete(currentFolder.id)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Folder
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        {/* Folder description */}
+        {currentFolder.description && (
+          <p className="text-muted-foreground mb-6">{currentFolder.description}</p>
+        )}
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" style={{ gridAutoRows: '260px' }}>
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-32 bg-muted rounded-lg animate-pulse"></div>
+              <div key={i} className="bg-muted rounded-lg animate-pulse"></div>
             ))}
           </div>
         ) : folderSnippets.length === 0 ? (
@@ -253,7 +258,7 @@ export default function Folders() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" style={{ gridAutoRows: '260px' }}>
             {folderSnippets.map((snippet) => (
               <SnippetCard
                 key={snippet.id}
@@ -354,9 +359,9 @@ export default function Folders() {
       <div className="p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-muted rounded w-1/4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-32 bg-muted rounded-lg"></div>
+              <div key={i} className="bg-muted rounded-lg"></div>
             ))}
           </div>
         </div>
@@ -460,7 +465,7 @@ export default function Folders() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {folders.map((folder) => (
             <div
               key={folder.id}
