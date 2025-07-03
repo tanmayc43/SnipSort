@@ -186,8 +186,7 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
     <Dialog open={modalOpen} onOpenChange={setModalOpen}>
       <DialogTrigger asChild>
         <div
-          className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col cursor-pointer group w-full h-[260px] justify-between"
-          style={{ minHeight: 0 }}
+          className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col cursor-pointer group w-full h-full justify-between"
           onClick={() => setModalOpen(true)}
         >
           <div className="flex items-start justify-between mb-3">
@@ -241,15 +240,16 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
               </DropdownMenu>
             </div>
           </div>
+          
           {snippet.tags && snippet.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 my-3 flex-grow">
-              {snippet.tags.slice(0, 4).map((tag) => {
+              {snippet.tags.slice(0, 3).map((tag) => {
                 const tagSlug = tag.toLowerCase().replace(/[^a-z0-9+#]+/g, '');
                 const isLangTag = tagSlug === langSlug;
                 return (
                   <span
                     key={tag}
-                    className="inline-flex items-center px-2 py-1 rounded-full text-xs"
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground"
                     style={isLangTag ? {
                       backgroundColor: langColor,
                       color: getContrastText(langColor)
@@ -259,13 +259,14 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
                   </span>
                 );
               })}
-              {snippet.tags.length > 4 && (
+              {snippet.tags.length > 3 && (
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground">
-                  +{snippet.tags.length - 4} more
+                  +{snippet.tags.length - 3}
                 </span>
               )}
             </div>
           )}
+          
           <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-3 mt-auto">
             <div className="flex items-center space-x-4">
               <span
@@ -280,7 +281,7 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
               {organizationInfo && (
                 <div className="flex items-center space-x-1">
                   <organizationInfo.icon className="h-3 w-3" />
-                  <span className="text-xs">{organizationInfo.name}</span>
+                  <span className="text-xs truncate max-w-20">{organizationInfo.name}</span>
                 </div>
               )}
             </div>
@@ -320,7 +321,7 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
           <CodeBlock code={(fullSnippet || snippet).code} />
         )}
         <DialogFooter className="flex-row justify-between">
-          <Button variant="outline" onClick={handleCopy}>
+          <Button variant="outline" onClick={() => handleCopy(fullSnippet || snippet)}>
             <Copy className="h-4 w-4 mr-2" /> Copy
           </Button>
           <Button variant="default" onClick={() => navigate(`/dashboard/snippet/${snippet.id}/edit`)}>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,31 +24,9 @@ export default function AllSnippets() {
   const [languageFilter, setLanguageFilter] = useState('all');
   const [sortBy, setSortBy] = useState('updated_at');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(9); // default desktop
-
-  const gridRef = useRef(null);
-  const containerRef = useRef(null);
-
-  // Dynamic page size based on grid width and height
-  useLayoutEffect(() => {
-    function updatePageSize() {
-      if (!gridRef.current || !containerRef.current) return;
-      const width = gridRef.current.offsetWidth;
-      const height = gridRef.current.offsetHeight;
-      const columns = Math.max(1, Math.floor(width / 320));
-      // Card height + gap (gap-2 = 8px)
-      const cardHeight = 260;
-      const gap = 8;
-      // Subtract filter/header height (estimate 120px) and pagination height (estimate 40px)
-      const availableHeight = containerRef.current.offsetHeight - 120;
-      const rows = Math.max(1, Math.floor(availableHeight / (cardHeight + gap)));
-      setPageSize(columns * rows);
-    }
-    updatePageSize();
-    window.addEventListener('resize', updatePageSize);
-    return () => window.removeEventListener('resize', updatePageSize);
-  }, []);
-
+  
+  // Fixed layout: 5 snippets per row, 2 rows = 10 snippets per page
+  const pageSize = 10;
   const totalPages = Math.ceil(filteredSnippets.length / pageSize);
   const paginatedSnippets = filteredSnippets.slice((page - 1) * pageSize, page * pageSize);
 
@@ -110,7 +88,7 @@ export default function AllSnippets() {
 
   useEffect(() => {
     setPage(1); // Reset to first page when filters change
-  }, [searchQuery, languageFilter, sortBy, showFavoritesOnly, pageSize]);
+  }, [searchQuery, languageFilter, sortBy, showFavoritesOnly]);
 
   const handleDelete = async (snippetId) => {
     const originalSnippets = snippets;  
@@ -174,22 +152,80 @@ export default function AllSnippets() {
     setSnippets(prev => prev.map(s => (s.id === snippetId ? { ...s, is_favorite: newFavoriteStatus } : s)));
   };
 
+  // Generate pagination items with ellipsis for large page counts
+  const generatePaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total is small
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(i);
+      }
+    } else {
+      // Show first page, current page area, and last page with ellipsis
+      if (page <= 3) {
+        // Near the beginning
+        for (let i = 1; i <= 4; i++) {
+          items.push(i);
+        }
+        items.push('...');
+        items.push(totalPages);
+      } else if (page >= totalPages - 2) {
+        // Near the end
+        items.push(1);
+        items.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          items.push(i);
+        }
+      } else {
+        // In the middle
+        items.push(1);
+        items.push('...');
+        for (let i = page - 1; i <= page + 1; i++) {
+          items.push(i);
+        }
+        items.push('...');
+        items.push(totalPages);
+      }
+    }
+    
+    return items;
+  };
+
   if(loading || authLoading){
     return(
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="flex flex-col space-y-3 p-4 border rounded-lg"><Skeleton className="h-24 w-full rounded-xl" /></div>
-        ))}
+      <div className="space-y-6">
+        {/* Filter skeleton */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Skeleton className="h-10 flex-1" />
+          <Skeleton className="h-10 w-32" />
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-10 w-48" />
+        </div>
+        
+        {/* Grid skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {[...Array(10)].map((_, i) => (
+            <div key={i} className="h-64 bg-muted rounded-lg animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full min-h-0">
-      <div className="flex flex-col sm:flex-row gap-4 pb-4">
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search snippets..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+          <Input 
+            placeholder="Search snippets..." 
+            value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)} 
+            className="pl-10" 
+          />
         </div>
         <Button
           variant={showFavoritesOnly ? "default" : "outline"}
@@ -201,7 +237,9 @@ export default function AllSnippets() {
           Favorites
         </Button>
         <Select value={languageFilter} onValueChange={setLanguageFilter}>
-          <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Filter by language" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder="Filter by language" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Languages</SelectItem>
             {languages.map((lang) => (
@@ -210,7 +248,9 @@ export default function AllSnippets() {
           </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Sort by" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="updated_at">Last Updated</SelectItem>
             <SelectItem value="created_at">Date Created</SelectItem>
@@ -219,72 +259,102 @@ export default function AllSnippets() {
           </SelectContent>
         </Select>
       </div>
-      <div className="flex flex-col flex-1 min-h-0 h-full">
-        {filteredSnippets.length === 0 ? (
-          <div className="text-center py-12 flex-1 flex flex-col justify-center">
-            <h3 className="text-lg font-semibold mb-2">No Snippets Found</h3>
-            <p className="text-muted-foreground mb-4">Try adjusting your search or create a new snippet.</p>
-            <Button asChild><Link to="/dashboard/snippet/new"><Plus className="h-4 w-4 mr-2" />Create Snippet</Link></Button>
-          </div>
-        ) : (
-          <div
-            ref={gridRef}
-            className="grid gap-2 flex-1 min-h-0 h-full"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-              gridAutoRows: '260px',
-              alignContent: 'start',
-            }}
-          >
+
+      {/* Content */}
+      {filteredSnippets.length === 0 ? (
+        <div className="text-center py-12">
+          <h3 className="text-lg font-semibold mb-2">No Snippets Found</h3>
+          <p className="text-muted-foreground mb-4">
+            {searchQuery || languageFilter !== 'all' || showFavoritesOnly
+              ? 'Try adjusting your search or filters.'
+              : 'Create your first snippet to get started.'
+            }
+          </p>
+          <Button asChild>
+            <Link to="/dashboard/snippet/new">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Snippet
+            </Link>
+          </Button>
+        </div>
+      ) : (
+        <>
+          {/* Fixed Grid: 5 columns, 2 rows */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {paginatedSnippets.map((snippet) => (
-              <SnippetCard
-                key={snippet.id}
-                snippet={snippet}
-                onDelete={handleDelete}
-                onToggleFavorite={() => handleToggleFavorite(snippet.id, snippet.is_favorite)}
-                onFavoriteToggled={onFavoriteToggled}
-              />
+              <div key={snippet.id} className="h-64">
+                <SnippetCard
+                  snippet={snippet}
+                  onDelete={handleDelete}
+                  onToggleFavorite={() => handleToggleFavorite(snippet.id, snippet.is_favorite)}
+                  onFavoriteToggled={onFavoriteToggled}
+                />
+              </div>
             ))}
+            
+            {/* Fill empty slots to maintain grid structure */}
             {Array.from({ length: pageSize - paginatedSnippets.length }).map((_, i) => (
-              <div key={i} className="invisible" />
+              <div key={`empty-${i}`} className="h-64 invisible" />
             ))}
           </div>
-        )}
-        {totalPages > 1 && (
-          <div className="flex justify-center">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    onClick={e => { e.preventDefault(); setPage(p => Math.max(1, p - 1)); }}
-                    aria-disabled={page === 1}
-                  />
-                </PaginationItem>
-                {[...Array(totalPages)].map((_, i) => (
-                  <PaginationItem key={i}>
-                    <PaginationLink
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center mt-8">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
                       href="#"
-                      isActive={page === i + 1}
-                      onClick={e => { e.preventDefault(); setPage(i + 1); }}
-                    >
-                      {i + 1}
-                    </PaginationLink>
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (page > 1) setPage(page - 1);
+                      }}
+                      className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
                   </PaginationItem>
-                ))}
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    onClick={e => { e.preventDefault(); setPage(p => Math.min(totalPages, p + 1)); }}
-                    aria-disabled={page === totalPages}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+                  
+                  {generatePaginationItems().map((item, index) => (
+                    <PaginationItem key={index}>
+                      {item === '...' ? (
+                        <span className="px-3 py-2 text-muted-foreground">...</span>
+                      ) : (
+                        <PaginationLink
+                          href="#"
+                          isActive={page === item}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setPage(item);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {item}
+                        </PaginationLink>
+                      )}
+                    </PaginationItem>
+                  ))}
+                  
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (page < totalPages) setPage(page + 1);
+                      }}
+                      className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
+
+          {/* Results info */}
+          <div className="text-center text-sm text-muted-foreground">
+            Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, filteredSnippets.length)} of {filteredSnippets.length} snippets
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
