@@ -186,9 +186,10 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
     <Dialog open={modalOpen} onOpenChange={setModalOpen}>
       <DialogTrigger asChild>
         <div
-          className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col cursor-pointer group w-full h-full justify-between"
+          className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col cursor-pointer group w-full h-full"
           onClick={() => setModalOpen(true)}
         >
+          {/* Header with title, description and actions */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-lg text-foreground group-hover:text-primary transition-colors truncate">
@@ -240,33 +241,41 @@ export default function SnippetCard({ snippet, onDelete, onToggleFavorite, onFav
               </DropdownMenu>
             </div>
           </div>
-          
+
+          {/* Tags row - styled like language tag */}
           {snippet.tags && snippet.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 my-3 flex-grow">
+            <div className="flex flex-wrap gap-1 mb-3">
               {snippet.tags.slice(0, 3).map((tag) => {
                 const tagSlug = tag.toLowerCase().replace(/[^a-z0-9+#]+/g, '');
                 const isLangTag = tagSlug === langSlug;
                 return (
                   <span
                     key={tag}
-                    className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground"
+                    className="px-2 py-1 rounded text-xs font-medium"
                     style={isLangTag ? {
                       backgroundColor: langColor,
                       color: getContrastText(langColor)
-                    } : {}}
+                    } : {
+                      backgroundColor: '#6b7280',
+                      color: '#ffffff'
+                    }}
                   >
                     {tag}
                   </span>
                 );
               })}
               {snippet.tags.length > 3 && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground">
+                <span className="px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground">
                   +{snippet.tags.length - 3}
                 </span>
               )}
             </div>
           )}
-          
+
+          {/* Spacer to push footer to bottom */}
+          <div className="flex-1"></div>
+
+          {/* Footer with language, organization, and date */}
           <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-3 mt-auto">
             <div className="flex items-center space-x-4">
               <span
