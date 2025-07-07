@@ -174,7 +174,7 @@ export default function SnippetEditor({ folderId: initialFolderId, folderName, p
   const selectedLanguageSlug = languages.find(lang => lang.id === parseInt(languageId))?.slug || 'plaintext';
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="mx-auto p-4 max-w-5xl">
       <h1 className="text-2xl font-bold mb-4">{isEditing ? 'Edit Snippet' : 'Create New Snippet'}</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -37,14 +37,14 @@ export default function Projects() {
   const { id: projectId } = useParams()
   const navigate = useNavigate()
   
-  console.log('Projects component rendered:', { 
-    projectId, 
-    hasSession: !!session, 
-    userId: session?.user?.id,
-    token: session?.access_token ? 'present' : 'missing',
-    sessionKeys: session ? Object.keys(session) : [],
-    userKeys: session?.user ? Object.keys(session.user) : []
-  })
+  // console.log('Projects component rendered:', { 
+  //   projectId, 
+  //   hasSession: !!session, 
+  //   userId: session?.user?.id,
+  //   token: session?.access_token ? 'present' : 'missing',
+  //   sessionKeys: session ? Object.keys(session) : [],
+  //   userKeys: session?.user ? Object.keys(session.user) : []
+  // })
   
   const [projects, setProjects] = useState([])
   const [currentProject, setCurrentProject] = useState(null)
@@ -60,7 +60,7 @@ export default function Projects() {
     is_public: false
   })
   
-  // Member management state
+  // member management state
   const [membersDialogOpen, setMembersDialogOpen] = useState(false)
   const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false)
   const [newMemberData, setNewMemberData] = useState({
@@ -69,15 +69,16 @@ export default function Projects() {
   })
 
   useEffect(() => {
-    console.log('Projects useEffect triggered:', { projectId, hasCurrentProject: !!currentProject })
-    if (projectId) {
+    // console.log('Projects useEffect triggered:', { projectId, hasCurrentProject: !!currentProject })
+    if(projectId){
       loadProjectDetails()
-    } else {
+    } 
+    else{
       loadProjects()
     }
   }, [projectId])
 
-  // Add focus event listener to refresh data when user returns to the page
+  // focus event listener to refresh data when user returns to the page
   useEffect(() => {
     const handleFocus = () => {
       if (projectId && !isDeleting) {
@@ -89,10 +90,10 @@ export default function Projects() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [projectId, isDeleting])
 
-  // Also refresh when the component becomes visible (for mobile/background tabs)
+  // also refresh when the component becomes visible (for mobile/background tabs)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && projectId && !isDeleting) {
+      if(!document.hidden && projectId && !isDeleting){
         loadProjectDetails()
       }
     }
@@ -102,13 +103,15 @@ export default function Projects() {
   }, [projectId, isDeleting])
 
   const loadProjects = async () => {
-    try {
+    try{
       const data = await projectApi.getAll(session?.access_token)
       setProjects(data)
-    } catch (error) {
+    } 
+    catch(error){
       console.error('Error loading projects:', error)
       toast.error('Error loading projects', { description: 'Failed to load projects. Please try again.' })
-    } finally {
+    } 
+    finally{
       setLoading(false)
     }
   }
@@ -116,35 +119,37 @@ export default function Projects() {
   const loadProjectDetails = async () => {
     try {
       setLoading(true)
-      console.log('Loading project details for projectId:', projectId)
+      //console.log('Loading project details for projectId:', projectId)
       
       const [projectData, snippetsData] = await Promise.all([
         projectApi.getById(projectId, session?.access_token),
         snippetApi.getByProject(projectId)
       ])
       
-      console.log('Project data:', projectData)
-      console.log('Project members:', projectData.members)
-      console.log('Snippets for this project:', snippetsData)
+      // console.log('Project data:', projectData)
+      // console.log('Project members:', projectData.members)
+      // console.log('Snippets for this project:', snippetsData)
       
       setCurrentProject(projectData)
       setProjectSnippets(snippetsData)
-    } catch (error) {
+    } 
+    catch(error){
       console.error('Error loading project details:', error)
       toast.error('Error loading project', { description: 'Failed to load project details. Please try again.' })
-    } finally {
+    } 
+    finally{
       setLoading(false)
     }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!formData.name.trim()) {
+    if(!formData.name.trim()){
       toast.error('Validation Error', { description: 'Project name is required.' })
       return
     }
 
-    try {
+    try{
       const projectData = {
         name: formData.name,
         description: formData.description,
@@ -152,14 +157,15 @@ export default function Projects() {
         is_public: formData.is_public
       }
 
-      if (editingProject) {
+      if(editingProject){
         const updatedProject = await projectApi.update(editingProject.id, projectData, session?.access_token)
         setProjects(prev => prev.map(p => p.id === editingProject.id ? updatedProject : p))
         if (currentProject && currentProject.id === editingProject.id) {
           setCurrentProject(updatedProject)
         }
         toast.success('Project updated', { description: 'Your project has been updated successfully.' })
-      } else {
+      } 
+      else{
         const newProject = await projectApi.create(projectData, session?.access_token)
         setProjects(prev => [...prev, newProject])
         toast.success('Project created', { description: 'Your project has been created successfully.' })
@@ -168,7 +174,8 @@ export default function Projects() {
       setDialogOpen(false)
       setEditingProject(null)
       setFormData({ name: '', description: '', color: '#10B981', is_public: false })
-    } catch (error) {
+    } 
+    catch(error){
       console.error('Error saving project:', error)
       toast.error('Error saving project', { description: `Failed to ${editingProject ? 'update' : 'create'} project. Please try again.` })
     }
@@ -186,19 +193,21 @@ export default function Projects() {
   }
 
   const handleDelete = async (projectId) => {
-    if (window.confirm('Are you sure you want to delete this project? All snippets in this project will be moved to "Uncategorized".')) {
-      try {
+    if(window.confirm('Are you sure you want to delete this project? All snippets in this project will be moved to "Uncategorized".')){
+      try{
         setIsDeleting(true)
         await projectApi.delete(projectId, session?.access_token)
         setProjects(prev => prev.filter(p => p.id !== projectId))
-        if (currentProject && currentProject.id === projectId) {
+        if(currentProject && currentProject.id === projectId){
           navigate('/dashboard/projects')
         }
         toast.success('Project deleted', { description: 'The project has been successfully deleted.' })
-      } catch (error) {
+      } 
+      catch(error){
         console.error('Error deleting project:', error)
         toast.error('Failed to delete', { description: 'Could not delete the project. Please try again.' })
-      } finally {
+      } 
+      finally{
         setIsDeleting(false)
       }
     }
@@ -211,12 +220,12 @@ export default function Projects() {
   }
 
   const isOwner = (project) => {
-    if (!session || !session.user) return false;
+    if(!session || !session.user) return false;
     return project.owner_id === session.user.id;
   }
 
   const getUserRole = (project) => {
-    if (!session || !session.user) return null;
+    if(!session || !session.user) return null;
     const members = project.members || project.project_members || [];
     const member = members.find(m => m.userId === session.user.id || m.user_id === session.user.id);
     return member?.role || 'member';
@@ -239,30 +248,32 @@ export default function Projects() {
 
   const handleAddMember = async (e) => {
     e.preventDefault()
-    if (!newMemberData.email.trim()) {
+    if(!newMemberData.email.trim()){
       toast.error('Validation Error', { description: 'Email is required.' })
       return
     }
 
-    try {
+    try{
       await projectApi.addMember(projectId, newMemberData.email, newMemberData.role, session?.access_token)
       setAddMemberDialogOpen(false)
       setNewMemberData({ email: '', role: 'member' })
-      loadProjectDetails() // Refresh to get updated member list
+      loadProjectDetails() // get updated member list
       toast.success('Member added', { description: 'The member has been added to the project successfully.' })
-    } catch (error) {
+    } 
+    catch(error){
       console.error('Error adding member:', error)
       toast.error('Failed to add member', { description: error.message || 'Could not add member to the project.' })
     }
   }
 
   const handleRemoveMember = async (memberId) => {
-    if (window.confirm('Are you sure you want to remove this member from the project?')) {
-      try {
+    if(window.confirm('Are you sure you want to remove this member from the project?')) {
+      try{
         await projectApi.removeMember(projectId, memberId, session?.access_token)
-        loadProjectDetails() // Refresh to get updated member list
+        loadProjectDetails();
         toast.success('Member removed', { description: 'The member has been removed from the project.' })
-      } catch (error) {
+      } 
+      catch(error){
         console.error('Error removing member:', error)
         toast.error('Failed to remove member', { description: error.message || 'Could not remove member from the project.' })
       }
@@ -303,7 +314,7 @@ export default function Projects() {
     if(currentUserRole === 'admin'){
       return targetRole === 'member'; // admin can only remove members
     }
-    return false; // members cannot remove anyone
+    return false; // members can't remove no one
   }
 
   // Project Detail View
@@ -619,7 +630,7 @@ export default function Projects() {
     )
   }
 
-  // Show loading state when we have a projectId but no currentProject yet
+  // loading state when we have a projectId but no currentProject yet
   if (projectId && !currentProject && loading) {
     console.log('Loading project details...')
     return (
@@ -636,7 +647,7 @@ export default function Projects() {
     )
   }
 
-  // Show error state when we have a projectId but failed to load
+  // error state when we have a projectId but failed to load
   if (projectId && !currentProject && !loading) {
     console.log('Failed to load project details, showing error state')
     return (

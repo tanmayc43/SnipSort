@@ -1,10 +1,33 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <meta name="theme-color" content="#18181b" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#fff" media="(prefers-color-scheme: light)">
+    <script>
+      (function(){
+        try{
+          document.documentElement.classList.add('theme-initial');
+          var theme = localStorage.getItem('vite-ui-theme');
+          if(!theme || theme === 'system'){
+            var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.classList.add(systemDark ? 'dark' : 'light');
+          }
+          else{
+            document.documentElement.classList.add(theme);
+          }
+          
+          window.requestAnimationFrame(function() {
+            document.documentElement.classList.remove('theme-initial');
+          });
+        }
+        catch(e){}
+      })();
+    </script>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>SnipSort</title>
+    
   </head>
   <body>
     <div id="root"></div>

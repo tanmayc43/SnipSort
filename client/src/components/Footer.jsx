@@ -6,7 +6,7 @@ export default function Footer(){
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
             Built with{" "}
             <a
-              href="https://nextjs.org"
+              href="https://react.dev/"
               target="_blank"
               rel="noreferrer"
               className="font-medium underline underline-offset-4"
@@ -27,7 +27,7 @@ export default function Footer(){
         </div>
         <div className="flex flex-col items-center gap-4 md:flex-row md:gap-6">
           <nav className="flex gap-4 md:gap-6">
-            <a
+            {/* <a
               href="#"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
@@ -38,7 +38,7 @@ export default function Footer(){
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Privacy
-            </a>
+            </a> */}
             <a
               href="#"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"

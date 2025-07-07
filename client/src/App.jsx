@@ -18,6 +18,7 @@ import Projects from './pages/dashboard/Projects'
 import Settings from './pages/dashboard/Settings'
 import ProtectedRoute from './components/ProtectedRoute'
 import NewSnippet from './pages/dashboard/NewSnippet'
+import Contact from './pages/Contact'
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<SignUp />} />
+                <Route path="/contact" element={<Contact />} />
                 <Route path="/dashboard" element={
                   <ProtectedRoute>
                     <DashboardLayout />

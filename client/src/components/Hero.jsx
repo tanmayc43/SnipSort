@@ -1,24 +1,46 @@
 import { Button } from "@/components/ui/button";
-import { ChevronRightIcon, Code2, Folder, Users, Search, Star } from "lucide-react";
+import { ChevronRightIcon, Code2, Folder, Users, Search, Star, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Particles } from "./Particles";
+import { useTheme } from "./theme-provider";
 
 export default function Hero() {
+  const { theme } = useTheme();
+  
+  const particleColors = theme === "dark" 
+    ? ["#ffffff", "#e5e7eb", "#d1d5db"] 
+    : ["#000000", "#1a1814", "#2e2a24"]; 
+
   return (
     <>
       {/* Hero */}
-      <div>
-        <div className="container mx-auto px-4 py-24 md:px-6 lg:py-32 2xl:max-w-[1400px]">
+      <div className="min-h-screen flex items-center -mt-20 relative overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <Particles 
+            particleCount={100}
+            particleSpread={5}
+            speed={0.07}
+            particleColors={particleColors}
+            alphaParticles={true}
+            particleBaseSize={50}
+            sizeRandomness={0.5}
+            cameraDistance={15}
+            disableRotation={false}
+            className="w-full h-full"
+          />
+        </div>
+        <div className="container mx-auto px-4 md:px-6 2xl:max-w-[1400px] relative z-10">
           {/* Announcement Banner */}
           <div className="flex justify-center">
-            <a
+            <div
               className="inline-flex items-center gap-x-2 rounded-full border p-1 ps-3 text-sm transition hover:bg-accent"
               href="#"
             >
               ✨ Now with Monaco Editor integration
               <span className="bg-muted-foreground/15 inline-flex items-center justify-center gap-x-2 rounded-full px-2.5 py-1.5 text-sm font-semibold">
-                <ChevronRightIcon className="h-4 w-4" />
+                :)
               </span>
-            </a>
+            </div>
           </div>
           {/* End Announcement Banner */}
           
@@ -39,16 +61,16 @@ export default function Hero() {
           
           {/* Buttons */}
           <div className="mt-8 flex justify-center gap-3">
-            <Button size={"lg"} asChild>
-              <Link to="/signup">Get Started Free</Link>
-            </Button>
-            <Button size={"lg"} variant={"outline"} asChild>
-              <Link to="/login">Sign In</Link>
+            <Button size={"lg"} asChild className="group">
+              <Link to="/signup" className="flex items-center gap-2">
+                Get Started
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Link>
             </Button>
           </div>
           {/* End Buttons */}
           
-          <div className="mt-5 flex items-center justify-center gap-x-1 sm:gap-x-3">
+          {/* <div className="mt-5 flex items-center justify-center gap-x-1 sm:gap-x-3">
             <span className="text-muted-foreground text-sm">
               Trusted by developers at:
             </span>
@@ -85,7 +107,7 @@ export default function Hero() {
               />
             </svg>
             <span className="text-sm font-bold">Meta</span>
-          </div>
+          </div> */}
         </div>
       </div>
       {/* End Hero */}

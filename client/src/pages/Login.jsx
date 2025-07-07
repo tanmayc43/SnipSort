@@ -7,7 +7,7 @@ import { ToggleButton } from '../components/ToggleButton'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { useFormValidation, commonSchemas } from '@/hooks/useFormValidation'
 import { toast } from 'sonner'
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Code2} from 'lucide-react'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -83,10 +83,13 @@ export default function Login() {
 
   return (
     <>
-      <nav className='flex items-center justify-between px-4 py-3 border-b'>
-        <Link to="/" className="text-lg font-semibold">
-          SnipSort
-        </Link>
+      <nav className='flex items-center justify-between px-4 py-3 border-b'> 
+        <div className="flex items-center gap-3">
+          <Code2 className="h-6 w-6" />
+          <Link to="/" className="text-lg font-semibold">
+            SnipSort
+          </Link>
+        </div>
         <div className="flex items-center gap-2">
           <ToggleButton />
         </div>

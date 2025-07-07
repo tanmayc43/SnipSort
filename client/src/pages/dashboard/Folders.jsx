@@ -188,7 +188,7 @@ export default function Folders() {
     setDialogOpen(true)
   }
 
-  // Permission: Only owner can edit snippets in a folder (customize if you have roles)
+  // no roles in folders, just matching the session
   const canEditSnippets = (folder) => {
     if (!session || !session.user || !folder) return false;
     return folder.owner_id === session.user.id;
@@ -236,6 +236,7 @@ export default function Folders() {
             </DropdownMenu>
           </div>
         </div>
+        
         {/* Folder description */}
         {currentFolder.description && (
           <p className="text-muted-foreground mb-6">{currentFolder.description}</p>

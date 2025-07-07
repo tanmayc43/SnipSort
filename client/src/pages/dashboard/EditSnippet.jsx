@@ -21,7 +21,7 @@ export default function EditSnippet() {
   }, [id])
 
   const loadSnippet = async () => {
-    try {
+    try{
       const data = await snippetService.getSnippet(id)
       setSnippet(data)
       // only allow owner/admin to edit
@@ -32,24 +32,27 @@ export default function EditSnippet() {
         const member = members.find(m => m.userId === session?.user?.id || m.user_id === session?.user?.id)
         role = member?.role || 'member'
       }
-      // (Optional) Add folder-based role check if you have folder sharing
+
+      // folder based checking?
       if (role === 'member' || !role) {
         setNotAllowed(true)
       }
-    } catch (error) {
-      console.error('Error loading snippet:', error)
+    } 
+    catch(error){
+      //console.error('Error loading snippet:', error)
       toast({
         title: "Error",
         description: "Failed to load snippet. Please try again.",
         variant: "destructive",
       })
       navigate('/dashboard/snippets')
-    } finally {
+    } 
+    finally{
       setLoading(false)
     }
   }
 
-  if (loading) {
+  if(loading){
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
@@ -60,7 +63,7 @@ export default function EditSnippet() {
     )
   }
 
-  if (notAllowed) {
+  if(notAllowed){
     return (
       <div className="p-6 text-center">
         <h1 className="text-2xl font-bold mb-4 text-destructive">Not authorized</h1>
@@ -72,7 +75,7 @@ export default function EditSnippet() {
     )
   }
 
-  if (!snippet) {
+  if(!snippet){
     return (
       <div className="p-6 text-center">
         <h1 className="text-2xl font-bold mb-4">Snippet not found</h1>

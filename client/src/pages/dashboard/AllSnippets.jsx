@@ -25,7 +25,8 @@ export default function AllSnippets() {
   const [sortBy, setSortBy] = useState('updated_at');
   const [page, setPage] = useState(1);
   
-  // Fixed layout: 5 snippets per row, 2 rows = 10 snippets per page
+  // what layout best??
+  // 5 snippets per row, 2 rows = 10 snippets per page
   const pageSize = 10;
   const totalPages = Math.ceil(filteredSnippets.length / pageSize);
   const paginatedSnippets = filteredSnippets.slice((page - 1) * pageSize, page * pageSize);
@@ -87,7 +88,7 @@ export default function AllSnippets() {
   }, [snippets, searchQuery, languageFilter, sortBy, showFavoritesOnly]);
 
   useEffect(() => {
-    setPage(1); // Reset to first page when filters change
+    setPage(1); // reset to first page when filters change
   }, [searchQuery, languageFilter, sortBy, showFavoritesOnly]);
 
   const handleDelete = async (snippetId) => {
@@ -109,21 +110,25 @@ export default function AllSnippets() {
     try{
       // fetch the full snippet to get all required fields
       const full = await snippetApi.getById(snippetId);
-      // Defensive tags handling
+      
+      // tags handling crying emoji
       let tags = [];
-      if (Array.isArray(full.tags)) {
+      if(Array.isArray(full.tags)){
         tags = full.tags;
-      } else if (typeof full.tags === 'string') {
-        try {
+      } 
+      else if(typeof full.tags === 'string'){
+        try{
           tags = JSON.parse(full.tags);
           if (!Array.isArray(tags)) tags = [];
-        } catch {
+        }
+        catch{
           tags = [];
         }
-      } else {
+      }
+      else{
         tags = [];
       }
-      console.log('full.tags:', full.tags, 'tags:', tags); // Debug log
+      // console.log('full.tags:', full.tags, 'tags:', tags);
       const payload = {
         title: full.title,
         code: full.code,
@@ -133,56 +138,57 @@ export default function AllSnippets() {
         is_public: typeof full.is_public === 'boolean' ? full.is_public : false,
         tags,
       };
+
       if (full.folder_id) payload.folder_id = full.folder_id;
       if (full.project_id) payload.project_id = full.project_id;
-      console.log('Outgoing payload:', payload); // Debug log
+      // console.log('Outgoing payload:', payload);
       await snippetApi.update(snippetId, payload);
-      console.log('[DEBUG] API call successful, state updated');
+      // console.log('[DEBUG] API call successful, state updated');
     }
     catch(error){
-      console.error('[DEBUG] API call failed, reverting state:', error);
+      // console.error('[DEBUG] API call failed, reverting state:', error);
       toast.error('Error updating favorite status', { description: error.message });
       setSnippets(prev => prev.map(s => (s.id === snippetId ? { ...s, is_favorite: isCurrentlyFavorite } : s))); // revert change
     }
   };
 
-  // Callback to update main state when favorite is toggled from SnippetCard
+  // update main state when favorite is toggled from SnippetCard
   const onFavoriteToggled = (snippetId, newFavoriteStatus) => {
     console.log('[DEBUG] onFavoriteToggled called with snippetId:', snippetId, 'newFavoriteStatus:', newFavoriteStatus);
     setSnippets(prev => prev.map(s => (s.id === snippetId ? { ...s, is_favorite: newFavoriteStatus } : s)));
   };
 
-  // Generate pagination items with ellipsis for large page counts
+  // pagination item generation with ellipsis for large page counts
   const generatePaginationItems = () => {
     const items = [];
     const maxVisiblePages = 5;
     
-    if (totalPages <= maxVisiblePages) {
-      // Show all pages if total is small
-      for (let i = 1; i <= totalPages; i++) {
+    if(totalPages<=maxVisiblePages){
+      for(let i=1;i<=totalPages;i++){
         items.push(i);
       }
-    } else {
-      // Show first page, current page area, and last page with ellipsis
-      if (page <= 3) {
-        // Near the beginning
-        for (let i = 1; i <= 4; i++) {
+    }
+    else{
+      // show first page, current page area, and last page with ellipsis
+
+      if(page<=3){ //beginning
+        for(let i=1;i<=4;i++){
           items.push(i);
         }
         items.push('...');
         items.push(totalPages);
-      } else if (page >= totalPages - 2) {
-        // Near the end
+      }
+      else if(page>=totalPages-2){ //ending
         items.push(1);
         items.push('...');
-        for (let i = totalPages - 3; i <= totalPages; i++) {
+        for (let i=totalPages-3;i<=totalPages;i++){
           items.push(i);
         }
-      } else {
-        // In the middle
+      }
+      else{ // middle
         items.push(1);
         items.push('...');
-        for (let i = page - 1; i <= page + 1; i++) {
+        for(let i=page-1;i<=page+1;i++){
           items.push(i);
         }
         items.push('...');
@@ -218,14 +224,22 @@ export default function AllSnippets() {
     <div className="flex flex-col h-full">
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search snippets..." 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)} 
-            className="pl-10" 
-          />
+        <div className="flex flex-1 items-center gap-4">
+          <Button asChild className="whitespace-nowrap">
+            <Link to="/dashboard/snippet/new">
+              <Plus className="h-4 w-4 mr-2" />
+              New Snippet
+            </Link>
+          </Button>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search snippets..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              className="pl-10" 
+            />
+          </div>
         </div>
         <Button
           variant={showFavoritesOnly ? "default" : "outline"}
@@ -281,10 +295,10 @@ export default function AllSnippets() {
         </div>
       ) : (
         <>
-          {/* Fixed Grid: 5 columns, 2 rows */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 flex-1">
+          {/* Fixed Grid: 5 columns, 2 rows  ig */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 flex-1">
             {paginatedSnippets.map((snippet) => (
-              <div key={snippet.id} className="h-64">
+              <div key={snippet.id}>
                 <SnippetCard
                   snippet={snippet}
                   onDelete={handleDelete}
@@ -300,9 +314,8 @@ export default function AllSnippets() {
             ))}
           </div>
 
-          {/* Pagination and Results - Fixed at bottom */}
+          {/* Pagination */}
           <div className="mt-6 space-y-4">
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex justify-center">
                 <Pagination>
